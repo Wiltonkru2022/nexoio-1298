@@ -45,7 +45,9 @@ async function deliverEmail(env: Bindings, to: string, subject: string, html: st
 export function createAuth(env: Bindings, executionCtx?: { waitUntil(promise: Promise<unknown>): void }): AuthRuntime {
   const db = createDb(env.DATABASE_URL);
   const background = (promise: Promise<unknown>) => executionCtx ? executionCtx.waitUntil(promise) : void promise;
-  const sendLink = async (to: string, subject: string, url: string) => { background(deliverEmail(env, to, subject, `<p>${subject}</p><p><a href=\"${url}\">Continuar com segurança</a></p><p>Se você não solicitou esta ação, ignore esta mensagem.</p>`)); };
+  const sendLink = async (to: string, subject: string, url: string) => {
+    background(deliverEmail(env, to, subject, `<p>${subject}</p><p><a href="${url}">Continuar com segurança</a></p><p>Se você não solicitou esta ação, ignore esta mensagem.</p>`));
+  };
   return betterAuth({
     appName: 'Nexoio', baseURL: env.AUTH_URL, secret: env.AUTH_SECRET,
     trustedOrigins: env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()),
