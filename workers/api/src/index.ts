@@ -13,6 +13,7 @@ import { platformRoutes } from './routes/platform';
 import { adminRoutes } from './routes/admin';
 import { moduleRecordRoutes } from './routes/module-records';
 import { operationalRoutes } from './routes/operations';
+import { financeCashRoutes } from './routes/finance-cash';
 import { productInfrastructureRoutes, publicAssetRoutes } from './routes/product-infrastructure';
 import type { ApiEnv } from './types';
 
@@ -55,6 +56,7 @@ app.route('/api/v1/customers', customerRoutes);
 app.route('/api/v1', catalogRoutes);
 app.route('/api/v1/appointments', appointmentRoutes);
 app.route('/api/v1', operationalRoutes);
+app.route('/api/v1', financeCashRoutes);
 app.route('/api/v1', productInfrastructureRoutes);
 app.route('/api/v1/module-records', moduleRecordRoutes);
 app.notFound((c) => error(c, 404, 'NOT_FOUND', 'Rota não encontrada'));
