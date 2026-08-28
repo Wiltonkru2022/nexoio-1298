@@ -1,4 +1,4 @@
-import 'dotenv/config';
+try { process.loadEnvFile?.(); } catch { /* DATABASE_URL may already be injected by CI. */ }
 import postgres from 'postgres';
 import { PERMISSIONS, ROLE_PERMISSIONS } from '@nexoio/permissions';
 import { CORE_MODULES, MODULE_DEPENDENCIES, MODULES, uuidv7 } from '@nexoio/core';
