@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MODULE_DEPENDENCIES, SEGMENT_MODULES, SITE_ONLY_MODULES } from '@nexoio/core';
+import { deriveOperationalRecords, MODULE_DEPENDENCIES, SEGMENT_MODULES, SEGMENT_QUESTIONS, SITE_ONLY_MODULES } from '@nexoio/core';
 
 describe('módulos por segmento',()=>{
   it('não habilita agenda para restaurantes',()=>expect(SEGMENT_MODULES.restaurant).not.toContain('schedule'));
@@ -9,4 +9,7 @@ describe('módulos por segmento',()=>{
   it('declara dependências operacionais',()=>{expect(MODULE_DEPENDENCIES.kitchen).toContain('orders');expect(MODULE_DEPENDENCIES.classes).toContain('plans')});
   it('mantém contas somente-site sem módulos operacionais',()=>{expect(SITE_ONLY_MODULES).toEqual(['overview','settings','public_site']);expect(SITE_ONLY_MODULES).not.toContain('cash')});
   it('oferece página pública para todos os segmentos',()=>{for(const modules of Object.values(SEGMENT_MODULES))expect(modules).toContain('public_site')});
+  it('possui onboarding adaptativo para todos os segmentos',()=>{for(const segment of Object.keys(SEGMENT_MODULES))expect(SEGMENT_QUESTIONS[segment as keyof typeof SEGMENT_QUESTIONS]?.length).toBeGreaterThan(0)});
+  it('cria a quantidade informada de mesas',()=>expect(deriveOperationalRecords('restaurant',{dineIn:true,tableCount:15}).filter(record=>record.moduleCode==='tables')).toHaveLength(15));
+  it('transforma respostas em configurações operacionais',()=>expect(deriveOperationalRecords('technical_assistance',{quoteApproval:true,equipmentPhotos:true}).map(record=>record.name)).toEqual(expect.arrayContaining(['Aprovação on-line','Registro fotográfico'])));
 });

@@ -1,0 +1,8 @@
+export type BuilderMode='simple'|'advanced'|'blocks';
+export type PreviewDevice='desktop'|'tablet'|'mobile';
+export type BlockType='hero'|'text'|'image'|'gallery'|'services'|'products'|'menu'|'team'|'testimonials'|'faq'|'map'|'contact'|'whatsapp'|'form'|'video'|'banner'|'promotion'|'counter'|'partners'|'social'|'schedule'|'online_order'|'pricing'|'plans'|'reviews'|'hours';
+export type SiteBlock={id:string;type:BlockType;enabled:boolean;favorite:boolean;title:string;text:string;buttonText:string;buttonUrl:string;mediaUrl:string;dataSource:'manual'|'all'|'category'|'best_sellers'|'promotions';dataFilter:string;visibility:'all'|'desktop'|'tablet'|'mobile';style:Record<string,string|number|boolean>};
+export type SitePage={id:string;name:string;slug:string;enabled:boolean;blocks:SiteBlock[]};
+export type SiteDesign={fontFamily:string;contentWidth:number;spacing:number;titleSize:number;radius:number;buttonStyle:'rounded'|'square'|'pill'|'outline';background:string;gradient:string;alignment:'left'|'center'|'right';columns:number;animation:'none'|'fade'|'slide'|'zoom';stickyHeader:boolean;transparentHeader:boolean;showMenu:boolean;showFooter:boolean};
+export type SiteEditor={headline:string;description:string;whatsappUrl:string;instagramUrl:string;primaryColor:string;template:string;product:'landing_page'|'professional_site'|'store_system';published:boolean;scheduledAt:string|null;seoTitle:string;seoDescription:string;address:string;builderMode:BuilderMode;setupMode:'quick'|'custom';design:SiteDesign;pages:SitePage[]};
+export type AssistAction='title'|'improve'|'description'|'whatsapp'|'colors'|'structure'|'seo';

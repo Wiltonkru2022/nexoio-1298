@@ -1,8 +1,8 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { desc, eq, or, ilike, sql } from 'drizzle-orm';
 import { createMiddleware } from 'hono/factory';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { auditLogs, authUsers, businessDomains, businessPublicProfiles, businesses, modules, plans, platformAdmins, subscriptions, users } from '@nexoio/db';
+import { auditLogs, authUsers, businessDomains, businessPublicProfiles, businesses, modules, plans, platformAdmins, subscriptions, usageCounters, users } from '@nexoio/db';
 import { error, requireSession } from '../middleware';
 import type { ApiEnv } from '../types';
 
@@ -20,4 +20,8 @@ adminRoutes.get('/domains',async c=>c.json({data:await c.get('db').select({id:bu
 adminRoutes.get('/sites',async c=>c.json({data:await c.get('db').select({businessId:businessPublicProfiles.businessId,businessName:businesses.displayName,slug:businesses.publicSlug,published:businessPublicProfiles.published,updatedAt:businessPublicProfiles.updatedAt}).from(businessPublicProfiles).innerJoin(businesses,eq(businesses.id,businessPublicProfiles.businessId)).limit(200)}));
 adminRoutes.get('/users',async c=>c.json({data:await c.get('db').select({id:authUsers.id,name:authUsers.name,email:authUsers.email,emailVerified:authUsers.emailVerified,twoFactorEnabled:authUsers.twoFactorEnabled,createdAt:authUsers.createdAt}).from(authUsers).orderBy(desc(authUsers.createdAt)).limit(200)}));
 adminRoutes.get('/modules',async c=>c.json({data:await c.get('db').select().from(modules).orderBy(modules.name)}));
-adminRoutes.get('/templates',c=>c.json({data:['beauty-01','restaurant-01','restaurant-02','store-01','service-01','clinic-01','generic-01','premium-01'].map(id=>({id,status:'active'}))}));
+const templateCatalog=[['beauty-01','Elegância','Beleza'],['beauty-02','Editorial','Beleza'],['barber-01','Barbearia clássica','Beleza'],['restaurant-01','Bistrô','Alimentação'],['restaurant-02','Urbano','Alimentação'],['restaurant-03','Delivery direto','Alimentação'],['store-01','Vitrine','Varejo'],['store-02','Catálogo minimalista','Varejo'],['service-01','Profissional','Serviços'],['service-02','Portfólio','Serviços'],['clinic-01','Clínica leve','Saúde'],['clinic-02','Especialidades','Saúde'],['gym-01','Energia','Fitness'],['studio-01','Movimento','Fitness'],['generic-01','Essencial','Geral'],['premium-01','Premium','Geral']] as const;
+adminRoutes.get('/templates',c=>c.json({data:templateCatalog.map(([id,name,category])=>({id,name,category,version:1,status:'Ativo'}))}));
+adminRoutes.get('/usage',async c=>c.json({data:await c.get('db').select({businessId:usageCounters.businessId,businessName:businesses.displayName,metric:usageCounters.metric,period:usageCounters.period,value:usageCounters.value}).from(usageCounters).innerJoin(businesses,eq(businesses.id,usageCounters.businessId)).orderBy(desc(usageCounters.period)).limit(500)}));
+adminRoutes.get('/finance',async c=>c.json({data:await c.get('db').select({businessId:subscriptions.businessId,businessName:businesses.displayName,planName:plans.name,status:subscriptions.status,monthlyValue:plans.priceMonthly,currentPeriodEnd:subscriptions.currentPeriodEnd}).from(subscriptions).innerJoin(businesses,eq(businesses.id,subscriptions.businessId)).innerJoin(plans,eq(plans.id,subscriptions.planId)).orderBy(desc(subscriptions.updatedAt)).limit(300)}));
+adminRoutes.get('/incidents',async c=>c.json({data:(await c.get('db').select({id:auditLogs.id,createdAt:auditLogs.createdAt,action:auditLogs.action,entityType:auditLogs.entityType,requestId:auditLogs.requestId}).from(auditLogs).where(or(ilike(auditLogs.action,'%error%'),ilike(auditLogs.action,'%fail%'),ilike(auditLogs.action,'%incident%'))).orderBy(desc(auditLogs.createdAt)).limit(300)).map(row=>({...row,severity:'Atenção'}))}));

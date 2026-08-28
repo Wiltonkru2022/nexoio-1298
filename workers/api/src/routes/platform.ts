@@ -6,11 +6,11 @@ import {
   BUSINESS_TYPES,
   CORE_MODULES,
   deriveSegmentModules,
+  deriveOperationalRecords,
   isAllowedSlug,
   MODULE_DEPENDENCIES,
   MODULES,
   SEGMENT_MODULES,
-  SEGMENT_INITIAL_RECORDS,
   SITE_ONLY_MODULES,
   uuidv7,
 } from "@nexoio/core";
@@ -63,7 +63,7 @@ const inviteSchema = z.object({ email: z.email(), roleId: z.uuid() }).strict();
 const blockSchema=z.object({id:z.string().min(1).max(80),type:z.enum(['hero','text','image','gallery','services','products','menu','team','testimonials','faq','map','contact','whatsapp','form','video','banner','promotion','counter','partners','social','schedule','online_order','pricing','plans','reviews','hours']),enabled:z.boolean(),favorite:z.boolean().default(false),title:z.string().max(160),text:z.string().max(5000),buttonText:z.string().max(80).default(''),buttonUrl:z.string().max(500).default(''),mediaUrl:z.string().max(1000).default(''),dataSource:z.enum(['manual','all','category','best_sellers','promotions']).default('manual'),dataFilter:z.string().max(160).default(''),visibility:z.enum(['all','desktop','tablet','mobile']).default('all'),style:z.record(z.string(),z.union([z.string(),z.number(),z.boolean()])).default({})});
 const pageSchema=z.object({id:z.string().min(1).max(80),name:z.string().min(1).max(80),slug:z.string().max(100),enabled:z.boolean(),blocks:z.array(blockSchema).max(100)});
 const designSchema=z.object({fontFamily:z.string().max(100),contentWidth:z.number().min(720).max(1600),spacing:z.number().min(0).max(160),titleSize:z.number().min(20).max(96),radius:z.number().min(0).max(60),buttonStyle:z.enum(['rounded','square','pill','outline']),background:z.string().max(100),gradient:z.string().max(300),alignment:z.enum(['left','center','right']),columns:z.number().min(1).max(4),animation:z.enum(['none','fade','slide','zoom']),stickyHeader:z.boolean(),transparentHeader:z.boolean(),showMenu:z.boolean(),showFooter:z.boolean()});
-const publicSiteSchema=z.object({headline:z.string().trim().min(2).max(160),description:z.string().trim().max(1000),whatsappUrl:z.string().max(500),instagramUrl:z.string().max(500).optional(),primaryColor:z.string().regex(/^#[0-9a-f]{6}$/i),template:z.enum(['beauty-01','restaurant-01','restaurant-02','store-01','service-01','clinic-01','generic-01','premium-01']),product:z.enum(['landing_page','professional_site','store_system']),published:z.boolean(),scheduledAt:z.union([z.iso.datetime(),z.literal(''),z.null()]).optional(),seoTitle:z.string().trim().max(70),seoDescription:z.string().trim().max(170),address:z.string().trim().max(300),builderMode:z.enum(['simple','advanced','blocks']).default('simple'),setupMode:z.enum(['quick','custom']).default('quick'),design:designSchema, pages:z.array(pageSchema).min(1).max(30)}).strict();
+const publicSiteSchema=z.object({headline:z.string().trim().min(2).max(160),description:z.string().trim().max(1000),whatsappUrl:z.string().max(500),instagramUrl:z.string().max(500).optional(),primaryColor:z.string().regex(/^#[0-9a-f]{6}$/i),template:z.enum(['beauty-01','beauty-02','barber-01','restaurant-01','restaurant-02','restaurant-03','store-01','store-02','service-01','service-02','clinic-01','clinic-02','gym-01','studio-01','generic-01','premium-01']),product:z.enum(['landing_page','professional_site','store_system']),published:z.boolean(),scheduledAt:z.union([z.iso.datetime(),z.literal(''),z.null()]).optional(),seoTitle:z.string().trim().max(70),seoDescription:z.string().trim().max(170),address:z.string().trim().max(300),builderMode:z.enum(['simple','advanced','blocks']).default('simple'),setupMode:z.enum(['quick','custom']).default('quick'),design:designSchema,pages:z.array(pageSchema).min(1).max(30)}).strict();
 const versionSchema=z.object({label:z.string().trim().min(1).max(120),config:publicSiteSchema}).strict();
 const assistSchema=z.object({action:z.enum(['title','improve','description','whatsapp','colors','structure','seo']),text:z.string().max(3000).default(''),segment:z.string().max(80).default('generic')}).strict();
 const businessSettingsSchema=z.object({displayName:z.string().trim().min(2).max(150),legalName:z.string().trim().max(180),documentNumber:z.string().trim().max(30),phone:z.string().trim().max(30),whatsapp:z.string().trim().max(30),email:z.union([z.email(),z.literal('')]),primaryColor:z.string().regex(/^#[0-9a-f]{6}$/i),secondaryColor:z.string().regex(/^#[0-9a-f]{6}$/i),address:z.string().trim().max(300),openingHours:z.string().trim().max(500)}).strict();
@@ -117,7 +117,7 @@ platformRoutes.get("/context", async (c) => {
   let grants: string[] = [];
   let activeModules: string[] = [];
   if (membership) {
-    let [permissionRows, moduleRows] = await Promise.all([
+    const [permissionRows, moduleRows] = await Promise.all([
       db
         .select({ code: rolePermissions.permissionCode })
         .from(rolePermissions)
@@ -132,73 +132,6 @@ platformRoutes.get("/context", async (c) => {
           ),
         ),
     ]);
-    if (membership.roleCode === "owner") {
-      await db
-        .insert(permissionCatalog)
-        .values(
-          PERMISSIONS.map((code) => ({
-            code,
-            description: code.replace(".", ": "),
-          })),
-        )
-        .onConflictDoNothing();
-      await db
-        .insert(rolePermissions)
-        .values(
-          PERMISSIONS.map((permissionCode) => ({
-            roleId: membership.roleId,
-            permissionCode,
-          })),
-        )
-        .onConflictDoNothing();
-      permissionRows = PERMISSIONS.map((code) => ({ code }));
-    }
-    const [progress]=await db.select({data:onboardingProgress.dataJson}).from(onboardingProgress).where(and(eq(onboardingProgress.userId,profile.id),eq(onboardingProgress.businessId,membership.businessId))).limit(1);
-    const progressData=progress?.data as {productMode?:string;answers?:Record<string,string|number|boolean>}|undefined;
-    const siteOnly=progressData?.productMode==='site_only';
-    const desiredModules=siteOnly?SITE_ONLY_MODULES:deriveSegmentModules(membership.segment as keyof typeof SEGMENT_MODULES,progressData?.answers??{});
-    const missingModules=desiredModules.filter(key=>!moduleRows.some(row=>row.key===key));
-    if(missingModules.length){await db.insert(modules).values(MODULES.map(key=>({key,name:key.replaceAll('_',' '),description:`Recurso ${key} da plataforma Nexoio`,core:CORE_MODULES.includes(key),dependenciesJson:MODULE_DEPENDENCIES[key]??[]}))).onConflictDoNothing();await db.insert(businessModules).values(missingModules.map(moduleCode=>({id:uuidv7(),businessId:membership.businessId,moduleCode,enabled:true,source:'segment_default'}))).onConflictDoUpdate({target:[businessModules.businessId,businessModules.moduleCode],set:{enabled:true,source:'segment_default',updatedAt:new Date()}});moduleRows=[...moduleRows,...missingModules.map(key=>({key}))]}
-    if (!moduleRows.some((row) => row.key === 'public_site')) {
-      await db.insert(modules).values({key:'public_site',name:'Página pública',description:'Site, domínio, conteúdo e publicação',core:true,dependenciesJson:[]}).onConflictDoNothing();
-      await db.insert(businessModules).values({id:uuidv7(),businessId:membership.businessId,moduleCode:'public_site',enabled:true,source:'segment_default'}).onConflictDoNothing();
-      moduleRows=[...moduleRows,{key:'public_site'}];
-    }
-    if (moduleRows.length === 0) {
-      const defaults = [
-        ...new Set([
-          ...CORE_MODULES,
-          ...(SEGMENT_MODULES[
-            membership.segment as keyof typeof SEGMENT_MODULES
-          ] ?? []),
-        ]),
-      ];
-      await db
-        .insert(modules)
-        .values(
-          MODULES.map((key) => ({
-            key,
-            name: key.replaceAll("_", " "),
-            description: `Módulo ${key} da plataforma Nexoio`,
-            core: CORE_MODULES.includes(key),
-            dependenciesJson: MODULE_DEPENDENCIES[key] ?? [],
-          })),
-        )
-        .onConflictDoNothing();
-      await db
-        .insert(businessModules)
-        .values(
-          defaults.map((moduleCode) => ({
-            id: uuidv7(),
-            businessId: membership.businessId,
-            moduleCode,
-            enabled: true,
-            source: "segment_default",
-          })),
-        )
-        .onConflictDoNothing();
-      moduleRows = defaults.map((key) => ({ key }));
-    }
     grants = permissionRows.map((x) => x.code);
     activeModules = moduleRows.map((x) => x.key);
   }
@@ -287,6 +220,8 @@ platformRoutes.post("/onboarding/business", async (c) => {
       "PROFILE_NOT_READY",
       "Perfil ainda não foi provisionado",
     );
+  const completed=(await db.select({businessId:onboardingProgress.businessId}).from(onboardingProgress).where(eq(onboardingProgress.userId,profile.id)).limit(1))[0];
+  if(completed?.businessId){const existing=(await db.select({id:businessMemberships.id}).from(businessMemberships).where(and(eq(businessMemberships.userId,profile.id),eq(businessMemberships.businessId,completed.businessId),eq(businessMemberships.status,'active'))).limit(1))[0];if(existing){setCookie(c,'nexoio_business',completed.businessId,{httpOnly:true,secure:c.env.AUTH_URL.startsWith('https'),sameSite:'Lax',path:'/'});return c.json({data:{businessId:completed.businessId,idempotent:true}},200)}}
   const businessId = uuidv7();
   const roleId = uuidv7();
   const moduleKeys = parsed.data.productMode === 'site_only'
@@ -302,38 +237,12 @@ platformRoutes.post("/onboarding/business", async (c) => {
           `${key} depende de ${dependency}`,
         );
   }
-  await db
-    .insert(permissionCatalog)
-    .values(
-      PERMISSIONS.map((code) => ({
-        code,
-        description: code.replace(".", ": "),
-      })),
-    )
-    .onConflictDoNothing();
-  await db
-    .insert(modules)
-    .values(
-      MODULES.map((key) => ({
-        key,
-        name: key.replaceAll("_", " "),
-        description: `Módulo ${key} da plataforma Nexoio`,
-        core: [
-          "overview",
-          "customers",
-          "sales",
-          "cash",
-          "finance",
-          "team",
-          "settings",
-        ].includes(key),
-        dependenciesJson: MODULE_DEPENDENCIES[key] ?? [],
-      })),
-    )
-    .onConflictDoNothing();
-  await db
-    .insert(businesses)
-    .values({
+  const operationalRecords=deriveOperationalRecords(parsed.data.segment,parsed.data.answers).filter(record=>moduleKeys.includes(record.moduleCode));
+  if(!operationalRecords.length)operationalRecords.push({moduleCode:'overview',name:'Configuração inicial',details:'Automação inicial concluída.',status:'Ativo',dataJson:{seeded:true,segment:parsed.data.segment}});
+  await db.batch([
+    db.insert(permissionCatalog).values(PERMISSIONS.map(code=>({code,description:code.replace('.',': ')}))).onConflictDoNothing(),
+    db.insert(modules).values(MODULES.map(key=>({key,name:key.replaceAll('_',' '),description:`Módulo ${key} da plataforma Nexoio`,core:CORE_MODULES.includes(key),dependenciesJson:MODULE_DEPENDENCIES[key]??[]}))).onConflictDoNothing(),
+    db.insert(businesses).values({
       id: businessId,
       displayName: parsed.data.displayName,
       legalName: parsed.data.legalName,
@@ -343,52 +252,38 @@ platformRoutes.post("/onboarding/business", async (c) => {
       phone: parsed.data.phone,
       email: parsed.data.email,
       timezone: parsed.data.timezone,
-    });
-  await db
-    .insert(roles)
-    .values({
+    }),
+    db.insert(roles).values({
       id: roleId,
       businessId,
       code: "owner",
       name: "Proprietário",
       isSystem: true,
-    });
-  await db
-    .insert(rolePermissions)
-    .values(PERMISSIONS.map((permissionCode) => ({ roleId, permissionCode })));
-  await db
-    .insert(businessMemberships)
-    .values({
+    }),
+    db.insert(rolePermissions).values(PERMISSIONS.map(permissionCode=>({roleId,permissionCode}))),
+    db.insert(businessMemberships).values({
       id: uuidv7(),
       businessId,
       userId: profile.id,
       roleId,
       status: "active",
       acceptedAt: new Date(),
-    });
-  await db
-    .insert(businessModules)
-    .values(
-      moduleKeys.map((moduleCode) => ({
+    }),
+    db.insert(businessModules).values(moduleKeys.map(moduleCode=>({
         id: uuidv7(),
         businessId,
         moduleCode,
         enabled: true,
         source: "segment_default",
-      })),
-    );
-  const initialRecords=SEGMENT_INITIAL_RECORDS[parsed.data.segment]??[];
-  if(initialRecords.length)await db.insert(moduleRecords).values(initialRecords.filter(record=>moduleKeys.includes(record.moduleCode)).map(record=>({id:uuidv7(),businessId,createdBy:profile.id,dataJson:{seeded:true},...record})));
-  await db
-    .insert(onboardingProgress)
-    .values({
+      }))),
+    db.insert(moduleRecords).values(operationalRecords.map(record=>({id:uuidv7(),businessId,createdBy:profile.id,...record}))),
+    db.insert(onboardingProgress).values({
       userId: profile.id,
       businessId,
       step: "finish",
       completedAt: new Date(),
       dataJson: parsed.data,
-    })
-    .onConflictDoUpdate({
+    }).onConflictDoUpdate({
       target: onboardingProgress.userId,
       set: {
         businessId,
@@ -397,8 +292,9 @@ platformRoutes.post("/onboarding/business", async (c) => {
         dataJson: parsed.data,
         updatedAt: new Date(),
       },
-    });
-  await db.insert(businessPublicProfiles).values({businessId,headline:parsed.data.displayName,description:'Conheça nossa empresa e fale com nossa equipe.',whatsappUrl:parsed.data.phone?`https://wa.me/${parsed.data.phone.replace(/\D/g,'')}`:null,addressJson:{city:parsed.data.city,state:parsed.data.state},themeJson:{product:parsed.data.productMode==='site_only'?'landing_page':'store_system',template:`${parsed.data.segment}-01`,sections:[]},seoJson:{title:parsed.data.displayName,description:`Conheça ${parsed.data.displayName}`},published:false}).onConflictDoNothing();
+    }),
+    db.insert(businessPublicProfiles).values({businessId,headline:parsed.data.displayName,description:'Conheça nossa empresa e fale com nossa equipe.',whatsappUrl:parsed.data.phone?`https://wa.me/${parsed.data.phone.replace(/\D/g,'')}`:null,addressJson:{city:parsed.data.city,state:parsed.data.state},themeJson:{product:parsed.data.productMode==='site_only'?'landing_page':'store_system',template:`${parsed.data.segment}-01`,sections:[]},seoJson:{title:parsed.data.displayName,description:`Conheça ${parsed.data.displayName}`},published:false}),
+  ]);
   setCookie(c, "nexoio_business", businessId, {
     httpOnly: true,
     secure: c.env.AUTH_URL.startsWith("https"),
@@ -544,7 +440,7 @@ platformRoutes.patch('/business/public-site',requirePermission('public_site.upda
 platformRoutes.get('/business/public-site/versions',requirePermission('public_site.read'),async c=>{const rows=await c.get('db').select().from(businessSiteVersions).where(eq(businessSiteVersions.businessId,c.get('auth').businessId));return c.json({data:rows.sort((a,b)=>b.version-a.version).slice(0,50)});});
 platformRoutes.post('/business/public-site/versions',requirePermission('public_site.update'),async c=>{const parsed=versionSchema.safeParse(await c.req.json().catch(()=>null));if(!parsed.success)return error(c,422,'VALIDATION_ERROR','Versão inválida',parsed.error.flatten());const businessId=c.get('auth').businessId;const rows=await c.get('db').select({version:businessSiteVersions.version}).from(businessSiteVersions).where(eq(businessSiteVersions.businessId,businessId));const version=rows.reduce((max,row)=>Math.max(max,row.version),0)+1;const id=uuidv7();await c.get('db').insert(businessSiteVersions).values({id,businessId,version,label:parsed.data.label,status:parsed.data.config.published?'published':parsed.data.config.scheduledAt?'scheduled':'draft',scheduledAt:parsed.data.config.scheduledAt?new Date(parsed.data.config.scheduledAt):null,configJson:parsed.data.config,createdBy:c.get('auth').userId});return c.json({data:{id,version}},201);});
 platformRoutes.post('/business/public-site/versions/:id/restore',requirePermission('public_site.update'),async c=>{const row=(await c.get('db').select().from(businessSiteVersions).where(and(eq(businessSiteVersions.id,c.req.param('id')),eq(businessSiteVersions.businessId,c.get('auth').businessId))).limit(1))[0];if(!row)return error(c,404,'VERSION_NOT_FOUND','Versão não encontrada');return c.json({data:{config:row.configJson}});});
-platformRoutes.post('/business/public-site/assist',requirePermission('public_site.update'),async c=>{const parsed=assistSchema.safeParse(await c.req.json().catch(()=>null));if(!parsed.success)return error(c,422,'VALIDATION_ERROR','Pedido de assistência inválido',parsed.error.flatten());const {action,text,segment}=parsed.data;const name=text.trim()||'seu negócio';const results={title:`${name}: qualidade que você percebe`,improve:`${name.replace(/\.$/,'')}. Atendimento próximo, qualidade e uma experiência feita para você.`,description:`Conheça ${name}, veja nossas opções e fale com nossa equipe de forma rápida e segura.`,whatsapp:`Olá! Quero saber mais sobre ${name}.`,colors:segment.includes('restaurant')?'#d95d24|#24150f':segment.includes('beauty')||segment.includes('salon')?'#9b5de5|#231942':'#6548e8|#171222',structure:'hero,services,benefits,testimonials,faq,contact',seo:`${name} | Serviços, informações e contato`};return c.json({data:{result:results[action]}});});
+platformRoutes.post('/business/public-site/assist',requirePermission('public_site.update'),async c=>{const parsed=assistSchema.safeParse(await c.req.json().catch(()=>null));if(!parsed.success)return error(c,422,'VALIDATION_ERROR','Pedido de assistência inválido',parsed.error.flatten());const {action,text,segment}=parsed.data;const name=text.trim()||'seu negócio';const fallbacks={title:`${name}: qualidade que você percebe`,improve:`${name.replace(/\.$/,'')}. Atendimento próximo, qualidade e uma experiência feita para você.`,description:`Conheça ${name}, veja nossas opções e fale com nossa equipe de forma rápida e segura.`,whatsapp:`Olá! Quero saber mais sobre ${name}.`,colors:segment.includes('restaurant')?'#d95d24|#24150f':segment.includes('beauty')||segment.includes('salon')?'#9b5de5|#231942':'#6548e8|#171222',structure:'hero,services,benefits,testimonials,faq,contact',seo:`${name} | Serviços, informações e contato`};if(!c.env.AI)return c.json({data:{result:fallbacks[action],provider:'fallback'}});const instruction=action==='colors'?'Responda somente duas cores hexadecimais separadas por |.':action==='structure'?'Responda somente uma lista curta de tipos de blocos separados por vírgula.':`Produza apenas o resultado final para a ação "${action}", sem explicações.`;try{const generated=await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast',{messages:[{role:'system',content:`Você é redator e designer brasileiro. Escreva em PT-BR impecável para uma empresa do segmento ${segment}. ${instruction}`},{role:'user',content:name}]}) as {response?:string};const result=generated.response?.trim();return c.json({data:{result:result||fallbacks[action],provider:result?'cloudflare-workers-ai':'fallback'}})}catch{return c.json({data:{result:fallbacks[action],provider:'fallback'}})}});
 platformRoutes.post(
   "/business/invitations",
   requirePermission("team.invite"),

@@ -6,6 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "observability": { "enabled": true },
+  "ai": { "binding": "AI" },
   "vars": { "AUTH_URL": "http://localhost:8787", "APP_URL": "http://localhost:5173", "ALLOWED_ORIGINS": "http://localhost:5173,http://localhost:5174,http://localhost:5175" },
   "r2_buckets": [{ "binding": "R2_BUCKET", "bucket_name": "nexoio-development" }],
   "env": {
