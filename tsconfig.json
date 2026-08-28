@@ -1,0 +1,15 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/validation" },
+    { "path": "packages/db" },
+    { "path": "packages/permissions" },
+    { "path": "workers/api" },
+    { "path": "workers/public-site" },
+    { "path": "apps/marketing" },
+    { "path": "apps/merchant" },
+    { "path": "apps/admin" },
+    { "path": "apps/public-site" }
+  ]
+}

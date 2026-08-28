@@ -1,0 +1,26 @@
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { secureHeaders } from 'hono/secure-headers';
+import { sql } from 'drizzle-orm';
+import { createAuth } from './auth';
+import { error, requestContext, requireAuth } from './middleware';
+import { customerRoutes } from './routes/customers';
+import { catalogRoutes } from './routes/catalog';
+import { appointmentRoutes } from './routes/appointments';
+import type { ApiEnv } from './types';
+
+const app = new Hono<ApiEnv>();
+app.use('*', requestContext);
+app.use('*', secureHeaders({ strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload', referrerPolicy: 'strict-origin-when-cross-origin', permissionsPolicy: { camera: [], microphone: [], geolocation: [] } }));
+app.use('/api/*', async (c, next) => cors({ origin: (origin) => c.env.ALLOWED_ORIGINS.split(',').map((x) => x.trim()).includes(origin) ? origin : '', credentials: true, allowHeaders: ['Content-Type','X-Business-Id','Idempotency-Key'], allowMethods: ['GET','POST','PATCH','DELETE','OPTIONS'] })(c, next));
+app.get('/health', (c) => c.json({ status: 'ok' }));
+app.get('/ready', async (c) => { try { await c.get('db').execute(sql`select 1`); return c.json({ status: 'ready' }); } catch { return error(c, 503, 'NOT_READY', 'Dependência indisponível'); } });
+app.all('/api/auth/*', (c) => createAuth(c.env).handler(c.req.raw));
+app.use('/api/v1/*', requireAuth);
+app.get('/api/v1/me', (c) => c.json({ data: { userId: c.get('auth').userId, businessId: c.get('auth').businessId, permissions: [...c.get('auth').permissions] } }));
+app.route('/api/v1/customers', customerRoutes);
+app.route('/api/v1', catalogRoutes);
+app.route('/api/v1/appointments', appointmentRoutes);
+app.notFound((c) => error(c, 404, 'NOT_FOUND', 'Rota não encontrada'));
+app.onError((err, c) => { console.error(JSON.stringify({ request_id: c.get('requestId'), error: err.message })); return error(c, 500, 'INTERNAL_ERROR', 'Erro interno'); });
+export default app;
