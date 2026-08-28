@@ -16,8 +16,16 @@ import type { ApiEnv } from './types';
 
 const app = new Hono<ApiEnv>();
 app.use('*', requestContext);
+app.use('*', async (c, next) => cors({
+  origin: (origin) => {
+    const allowed = new Set(c.env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()).filter(Boolean));
+    return allowed.has(origin) ? origin : '';
+  },
+  credentials: true,
+  allowHeaders: ['Content-Type', 'X-Business-Id', 'Idempotency-Key'],
+  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
+})(c, next));
 app.use('*', secureHeaders({ strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload', referrerPolicy: 'strict-origin-when-cross-origin', permissionsPolicy: { camera: [], microphone: [], geolocation: [] } }));
-app.use('/api/*', async (c, next) => cors({ origin: (origin) => c.env.ALLOWED_ORIGINS.split(',').map((x) => x.trim()).includes(origin) ? origin : '', credentials: true, allowHeaders: ['Content-Type','X-Business-Id','Idempotency-Key'], allowMethods: ['GET','POST','PATCH','DELETE','OPTIONS'] })(c, next));
 app.get('/health', (c) => c.json({ status: 'ok' }));
 app.get('/ready', async (c) => { try { await c.get('db').execute(sql`select 1`); return c.json({ status: 'ready' }); } catch { return error(c, 503, 'NOT_READY', 'Dependência indisponível'); } });
 app.all('/api/auth/*', async (c) => {
