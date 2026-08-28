@@ -2,6 +2,8 @@ import type { AnchorHTMLAttributes, ButtonHTMLAttributes, PropsWithChildren, Rea
 import './foundations.css';
 import './styles.css';
 import './patterns.css';
+import './experience.css';
+export * from './experience';
 
 export function Brand() {
   return <a className="brand" href="/"><span>N</span><b>Nexoio</b></a>;
@@ -30,12 +32,12 @@ export function SectionTitle({ eyebrow, title, description, action }: { eyebrow?
 }
 
 export function EmptyState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
-  return <div className="empty-state"><div className="empty-icon">✦</div><h3>{title}</h3><p>{description}</p>{action}</div>;
+  return <div className="empty-state"><div className="empty-icon" aria-hidden><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 7l8-4 8 4-8 4-8-4zm0 0v10l8 4 8-4V7m-8 4v10"/></svg></div><h3>{title}</h3><p>{description}</p>{action}</div>;
 }
 
 export function Alert({title,description,tone='neutral'}:{title:string;description?:string;tone?:'neutral'|'success'|'warning'|'danger'}){return <div className={`nx-alert ${tone}`} role={tone==='danger'?'alert':'status'}><span aria-hidden>{tone==='success'?'✓':tone==='warning'?'!':tone==='danger'?'×':'i'}</span><div><strong>{title}</strong>{description?<p>{description}</p>:null}</div></div>}
 export function Skeleton({height=18,width='100%'}:{height?:number;width?:string}){return <span className="nx-skeleton" aria-hidden style={{display:'block',height,width}}/>}
-export function PageState({kind,title,description,action}:{kind:'empty'|'error'|'offline'|'forbidden'|'incomplete'|'success';title:string;description:string;action?:ReactNode}){const icons={empty:'✦',error:'×',offline:'↯',forbidden:'⌁',incomplete:'◌',success:'✓'};return <div className={`nx-page-state ${kind}`} role={kind==='error'?'alert':'status'}><div className="nx-page-state-icon">{icons[kind]}</div><h3>{title}</h3><p>{description}</p>{action}</div>}
+export function PageState({kind,title,description,action}:{kind:'empty'|'error'|'offline'|'forbidden'|'incomplete'|'success';title:string;description:string;action?:ReactNode}){const labels={empty:'Sem conteúdo',error:'Erro',offline:'Sem conexão',forbidden:'Acesso restrito',incomplete:'Configuração incompleta',success:'Concluído'};return <div className={`nx-page-state ${kind}`} role={kind==='error'?'alert':'status'}><div className="nx-page-state-icon" aria-hidden>{labels[kind].slice(0,1)}</div><h3>{title}</h3><p>{description}</p>{action}</div>}
 export function Tabs({items,value,onChange}:{items:Array<{value:string;label:string}>;value:string;onChange:(value:string)=>void}){return <div className="nx-tabs" role="tablist">{items.map(item=><button type="button" role="tab" aria-selected={value===item.value} onClick={()=>onChange(item.value)} key={item.value}>{item.label}</button>)}</div>}
 
 export function Shell({ title, subtitle, children, nav, actions }: PropsWithChildren<{ title: string; subtitle?: string; nav?: ReactNode; actions?: ReactNode }>) {
