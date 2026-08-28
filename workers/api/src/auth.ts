@@ -9,8 +9,6 @@ import type { Bindings } from './types';
 type AuthSession = { user: { id: string; email: string; name: string; emailVerified: boolean; twoFactorEnabled?: boolean }; session: { id: string; expiresAt: Date } };
 export type AuthRuntime = { handler(request: Request): Promise<Response>; api: { getSession(input: { headers: Headers }): Promise<AuthSession | null> } };
 
-// Better Auth 1.7+ requires `issuer` on the account model. Keep the adapter
-// schema aligned with the physical auth_accounts table migrated by 0002.
 const authAccountsV17 = pgTable('auth_accounts', {
   id: text().primaryKey(),
   issuer: text().notNull(),
@@ -36,8 +34,8 @@ function parseSender(value: string) {
 
 async function deliverEmail(env: Bindings, to: string, subject: string, html: string) {
   if (!env.BREVO_API_KEY || !env.EMAIL_FROM) {
-    console.log(JSON.stringify({ event: 'email.skipped', to, subject }));
-    return;
+    console.error(JSON.stringify({ event: 'email.skipped', to, subject, reason: 'missing_configuration' }));
+    throw new Error('Email provider is not configured');
   }
 
   const response = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -55,18 +53,19 @@ async function deliverEmail(env: Bindings, to: string, subject: string, html: st
     })
   });
 
+  const detail = await response.text().catch(() => '');
   if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    console.error(JSON.stringify({ event: 'email.failed', provider: 'brevo', status: response.status, detail: detail.slice(0, 500) }));
+    console.error(JSON.stringify({ event: 'email.failed', provider: 'brevo', to, subject, status: response.status, detail: detail.slice(0, 500) }));
     throw new Error(`Email provider returned ${response.status}`);
   }
+
+  console.log(JSON.stringify({ event: 'email.sent', provider: 'brevo', to, subject, status: response.status, detail: detail.slice(0, 500) }));
 }
 
-export function createAuth(env: Bindings, executionCtx?: { waitUntil(promise: Promise<unknown>): void }): AuthRuntime {
+export function createAuth(env: Bindings, _executionCtx?: { waitUntil(promise: Promise<unknown>): void }): AuthRuntime {
   const db = createDb(env.DATABASE_URL);
-  const background = (promise: Promise<unknown>) => executionCtx ? executionCtx.waitUntil(promise) : void promise;
   const sendLink = async (to: string, subject: string, url: string) => {
-    background(deliverEmail(env, to, subject, `<p>${subject}</p><p><a href="${url}">Continuar com segurança</a></p><p>Se você não solicitou esta ação, ignore esta mensagem.</p>`));
+    await deliverEmail(env, to, subject, `<p>${subject}</p><p><a href="${url}">Continuar com segurança</a></p><p>Se você não solicitou esta ação, ignore esta mensagem.</p>`);
   };
   return betterAuth({
     appName: 'Nexoio', baseURL: env.AUTH_URL, secret: env.AUTH_SECRET,
