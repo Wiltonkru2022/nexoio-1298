@@ -1,0 +1,12 @@
+:root{
+ --nx-bg:#f5f4f8;--nx-bg-subtle:#faf9fc;--nx-surface:#fff;--nx-surface-raised:#fff;--nx-surface-hover:#f3f0fa;--nx-surface-selected:#eee9ff;
+ --nx-border:#e6e2eb;--nx-border-strong:#d4cedd;--nx-text:#191620;--nx-text-soft:#4f4957;--nx-text-muted:#7b7483;--nx-text-inverse:#fff;
+ --nx-brand:#6548e8;--nx-brand-hover:#5438d2;--nx-brand-soft:#eee9ff;--nx-success:#16815a;--nx-success-soft:#e8f7ef;--nx-warning:#a96a00;--nx-warning-soft:#fff2d8;--nx-danger:#bd3446;--nx-danger-soft:#ffe7eb;--nx-info:#1769aa;
+ --nx-space-1:4px;--nx-space-2:8px;--nx-space-3:12px;--nx-space-4:16px;--nx-space-5:20px;--nx-space-6:24px;--nx-space-8:32px;--nx-space-10:40px;--nx-space-12:48px;--nx-space-16:64px;
+ --nx-radius-sm:8px;--nx-radius-md:12px;--nx-radius-lg:18px;--nx-radius-xl:24px;--nx-radius-pill:999px;
+ --nx-shadow-sm:0 4px 14px #21172f0a;--nx-shadow-md:0 14px 38px #21172f12;--nx-shadow-lg:0 28px 70px #21172f1c;
+ --nx-motion-fast:140ms;--nx-motion-base:220ms;--nx-ease:cubic-bezier(.2,.8,.2,1);--nx-control-height:44px;--nx-content:1480px;
+ --brand:var(--nx-brand);--brand-dark:var(--nx-brand-hover);--ink:var(--nx-text);--muted:var(--nx-text-muted);--line:var(--nx-border);--surface:var(--nx-surface);--success:var(--nx-success);--warning:var(--nx-warning);--danger:var(--nx-danger)
+}
+*:focus-visible{outline:3px solid color-mix(in srgb,var(--nx-brand) 30%,transparent);outline-offset:2px}button,input,select,textarea{font:inherit}button{transition:background var(--nx-motion-fast) var(--nx-ease),border-color var(--nx-motion-fast) var(--nx-ease),transform var(--nx-motion-fast) var(--nx-ease)}input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]),select,textarea{min-height:var(--nx-control-height);border:1px solid var(--nx-border);border-radius:var(--nx-radius-md);background:var(--nx-surface);color:var(--nx-text);padding:10px 12px}input:disabled,select:disabled,textarea:disabled{background:#f0eef3;color:#999;cursor:not-allowed}[aria-invalid=true]{border-color:var(--nx-danger)!important;box-shadow:0 0 0 3px var(--nx-danger-soft)!important}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
