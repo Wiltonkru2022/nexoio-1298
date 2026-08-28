@@ -13,6 +13,7 @@ import { platformRoutes } from './routes/platform';
 import { adminRoutes } from './routes/admin';
 import { moduleRecordRoutes } from './routes/module-records';
 import { operationalRoutes } from './routes/operations';
+import { productInfrastructureRoutes, publicAssetRoutes } from './routes/product-infrastructure';
 import type { ApiEnv } from './types';
 
 const app = new Hono<ApiEnv>();
@@ -29,6 +30,7 @@ app.use('*', async (c, next) => cors({
 app.use('*', secureHeaders({ strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload', referrerPolicy: 'strict-origin-when-cross-origin', permissionsPolicy: { camera: [], microphone: [], geolocation: [] } }));
 app.get('/health', (c) => c.json({ status: 'ok' }));
 app.get('/ready', async (c) => { try { await c.get('db').execute(sql`select 1`); return c.json({ status: 'ready' }); } catch { return error(c, 503, 'NOT_READY', 'Dependência indisponível'); } });
+app.route('/api/public/media', publicAssetRoutes);
 app.all('/api/auth/*', async (c) => {
   const response=await createAuth(c.env,c.executionCtx).handler(c.req.raw); const route=c.req.path.replace('/api/auth/','');
   const events:Record<string,string>={'sign-in/email':response.ok?'auth.login.success':'auth.login.failed','sign-out':'auth.logout','change-password':'auth.password.changed','reset-password':'auth.password.reset','change-email':'auth.email.changed','revoke-other-sessions':'auth.session.revoked','two-factor/enable':'auth.mfa.enabled','two-factor/disable':'auth.mfa.disabled'};
@@ -53,6 +55,7 @@ app.route('/api/v1/customers', customerRoutes);
 app.route('/api/v1', catalogRoutes);
 app.route('/api/v1/appointments', appointmentRoutes);
 app.route('/api/v1', operationalRoutes);
+app.route('/api/v1', productInfrastructureRoutes);
 app.route('/api/v1/module-records', moduleRecordRoutes);
 app.notFound((c) => error(c, 404, 'NOT_FOUND', 'Rota não encontrada'));
 app.onError((err, c) => { console.error(JSON.stringify({ request_id: c.get('requestId'), error: err.message })); return error(c, 500, 'INTERNAL_ERROR', 'Erro interno'); });
