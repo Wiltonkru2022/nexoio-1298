@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ComponentType } from 'react';
 import { MerchantShell } from './components/MerchantShell';
 import { OverviewPage } from './pages/OverviewPage';
 import { CustomersPage } from './pages/CustomersPage';
@@ -12,7 +13,7 @@ import { TeamPage } from './pages/TeamPage';
 import { SettingsPage } from './pages/SettingsPage';
 import './merchant.css';
 
-const pages: Record<string, () => JSX.Element> = {
+const pages: Record<string, ComponentType> = {
   '/': OverviewPage,
   '/clientes': CustomersPage,
   '/agenda': SchedulePage,
@@ -27,8 +28,20 @@ const pages: Record<string, () => JSX.Element> = {
 
 export function App() {
   const [path, setPath] = useState(window.location.pathname);
-  useEffect(() => { const onPop = () => setPath(window.location.pathname); window.addEventListener('popstate', onPop); return () => window.removeEventListener('popstate', onPop); }, []);
-  const navigate = (next: string) => { if (next === path) return; history.pushState({}, '', next); setPath(next); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const navigate = (next: string) => {
+    if (next === path) return;
+    history.pushState({}, '', next);
+    setPath(next);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const Page = pages[path] ?? OverviewPage;
   return <MerchantShell currentPath={pages[path] ? path : '/'} onNavigate={navigate}><Page /></MerchantShell>;
 }
