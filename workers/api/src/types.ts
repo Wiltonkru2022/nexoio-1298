@@ -20,6 +20,15 @@ export interface Bindings {
   BILLING_API_KEY?: string;
   BILLING_WEBHOOK_SECRET?: string;
 }
-export interface AuthContext { userId: string; businessId: string; roleId: string; permissions: Set<Permission>; mfaEnabled: boolean; platformAdmin: boolean; }
+export interface AuthContext {
+  userId: string;
+  businessId: string;
+  roleId: string;
+  membershipId: string;
+  permissions: Set<Permission>;
+  policyLimits: Map<string, number | string | boolean>;
+  mfaEnabled: boolean;
+  platformAdmin: boolean;
+}
 export interface Variables { requestId: string; db: Database; auth: AuthContext; sessionUser: { id: string; email: string; name: string; emailVerified: boolean; twoFactorEnabled?: boolean }; }
 export type ApiEnv = { Bindings: Bindings; Variables: Variables };
