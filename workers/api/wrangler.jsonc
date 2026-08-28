@@ -12,6 +12,7 @@
   "env": {
     "staging": {
       "name": "nexoio-api-staging",
+      "ai": { "binding": "AI" },
       "workers_dev": false,
       "routes": [{ "pattern": "api-staging.nexoio.com.br", "custom_domain": true }],
       "vars": { "AUTH_URL": "https://api-staging.nexoio.com.br", "APP_URL": "https://app-staging.nexoio.com.br", "ALLOWED_ORIGINS": "https://app-staging.nexoio.com.br,https://admin-staging.nexoio.com.br" },
@@ -19,6 +20,7 @@
     },
     "production": {
       "name": "nexoio-api",
+      "ai": { "binding": "AI" },
       "workers_dev": false,
       "routes": [{ "pattern": "api.nexoio.com.br", "custom_domain": true }],
       "vars": { "AUTH_URL": "https://api.nexoio.com.br", "APP_URL": "https://app.nexoio.com.br", "ALLOWED_ORIGINS": "https://app.nexoio.com.br,https://admin.nexoio.com.br" },
