@@ -1,52 +1,24 @@
-import { useState } from 'react';
-import { Button, Metric, Pill, SectionTitle, Shell } from '@nexoio/ui';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Button, EmptyState, Metric, Pill, SectionTitle, Shell } from '@nexoio/ui';
+import { adminApi } from './lib/api';
+import './admin.css';
 
-type AdminView = 'resumo' | 'empresas' | 'planos' | 'consumo' | 'financeiro' | 'auditoria' | 'incidentes' | 'configuracoes';
+type Business={id:string;displayName:string;publicSlug:string;businessType:string;status:string;createdAt:string};
+type Audit={id:string;action:string;entityType:string|null;createdAt:string};
+type Plan={id:string;name:string;code:string;priceMonthly:string;active:boolean};
+const routes=[['/','Resumo'],['/empresas','Empresas'],['/planos','Planos'],['/consumo','Consumo'],['/financeiro','Financeiro'],['/auditoria','Auditoria'],['/incidentes','Incidentes'],['/configuracoes','Configurações']] as const;
 
-const items: Array<{ key: AdminView; label: string }> = [
-  { key: 'resumo', label: 'Resumo' },
-  { key: 'empresas', label: 'Empresas' },
-  { key: 'planos', label: 'Planos' },
-  { key: 'consumo', label: 'Consumo' },
-  { key: 'financeiro', label: 'Financeiro' },
-  { key: 'auditoria', label: 'Auditoria' },
-  { key: 'incidentes', label: 'Incidentes' },
-  { key: 'configuracoes', label: 'Configurações' },
-];
-
-function EmptyPanel({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
-  return <section className="panel"><SectionTitle eyebrow={eyebrow} title={title} description={description} /><div className="empty-state"><div className="empty-icon">✦</div><h3>Nenhum registro ainda</h3><p>Os dados aparecerão aqui assim que a API retornar informações para este módulo.</p></div></section>;
-}
-
-function Summary() {
-  return <>
-    <section className="grid">
-      <Metric label="Empresas ativas" value="0" trend="0%" note="Nenhuma empresa ativa ainda" />
-      <Metric label="MRR" value="R$ 0" note="Receita recorrente mensal" />
-      <Metric label="Requisições hoje" value="0" note="Dentro da faixa esperada" />
-      <Metric label="Alertas críticos" value="0" note="Nenhuma ação necessária" />
-    </section>
-    <section className="dashboard-columns">
-      <div className="panel"><SectionTitle eyebrow="PLATAFORMA" title="Saúde operacional" description="Status dos principais componentes da infraestrutura." /><div className="activity"><div className="activity-item"><div className="activity-dot"/><div><strong>API</strong><span>Cloudflare Worker principal</span></div><Pill tone="success">Operacional</Pill></div><div className="activity-item"><div className="activity-dot"/><div><strong>Neon PostgreSQL</strong><span>Banco principal da plataforma</span></div><Pill tone="success">Conectado</Pill></div><div className="activity-item"><div className="activity-dot"/><div><strong>Cloudflare R2</strong><span>Arquivos privados</span></div><Pill tone="success">Disponível</Pill></div></div></div>
-      <div className="panel"><SectionTitle eyebrow="CONSUMO" title="Últimos 7 dias" description="Leitura visual de uso da plataforma." /><div className="chart">{[18,30,26,44,38,58,49].map((h,i)=><div key={i} className="bar" style={{height:`${h}%`}}/>)}</div><div className="bar-labels"><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span>Dom</span></div></div>
-    </section>
-  </>;
-}
-
-const viewContent: Record<Exclude<AdminView, 'resumo'>, { eyebrow: string; title: string; description: string }> = {
-  empresas: { eyebrow: 'EMPRESAS', title: 'Empresas da plataforma', description: 'Gerencie contas, situação, módulos e acesso.' },
-  planos: { eyebrow: 'PLANOS', title: 'Planos e limites', description: 'Administre planos comerciais, recursos e entitlements.' },
-  consumo: { eyebrow: 'CONSUMO', title: 'Consumo da plataforma', description: 'Acompanhe requisições, armazenamento e uso por empresa.' },
-  financeiro: { eyebrow: 'FINANCEIRO', title: 'Financeiro da Nexoio', description: 'Acompanhe receita recorrente, cobranças e situação financeira.' },
-  auditoria: { eyebrow: 'AUDITORIA', title: 'Auditoria', description: 'Consulte ações administrativas e eventos sensíveis.' },
-  incidentes: { eyebrow: 'INCIDENTES', title: 'Incidentes', description: 'Registre e acompanhe eventos críticos da plataforma.' },
-  configuracoes: { eyebrow: 'CONFIGURAÇÕES', title: 'Configurações da plataforma', description: 'Defina políticas e parâmetros globais da Nexoio.' },
-};
-
-export function App() {
-  const [view, setView] = useState<AdminView>('resumo');
-  const nav = <nav className="admin-nav">{items.map(item => <button key={item.key} type="button" className={view === item.key ? 'active' : ''} onClick={() => setView(item.key)}>{item.label}</button>)}</nav>;
-  return <Shell title="Controle da plataforma" subtitle="Administração Master da Nexoio." nav={nav} actions={<Button ghost onClick={() => location.reload()}>Atualizar</Button>}>
-    {view === 'resumo' ? <Summary /> : <EmptyPanel {...viewContent[view]} />}
-  </Shell>;
+export function App(){
+  const[path,setPath]=useState(location.pathname);const[businesses,setBusinesses]=useState<Business[]>([]);const[plans,setPlans]=useState<Plan[]>([]);const[audit,setAudit]=useState<Audit[]>([]);const[error,setError]=useState('');const[modal,setModal]=useState(false);
+  useEffect(()=>{Promise.all([adminApi.get<{data:Business[]}>('/api/v1/admin/businesses'),adminApi.get<{data:Plan[]}>('/api/v1/admin/plans'),adminApi.get<{data:Audit[]}>('/api/v1/admin/audit')]).then(([b,p,a])=>{setBusinesses(b.data);setPlans(p.data);setAudit(a.data)}).catch(reason=>setError(reason instanceof Error?reason.message:'Falha ao carregar'));const pop=()=>setPath(location.pathname);addEventListener('popstate',pop);return()=>removeEventListener('popstate',pop)},[]);
+  const go=(next:string)=>{history.pushState({},'',next);setPath(next)};const active=businesses.filter(item=>item.status==='active').length;
+  const toggle=async(item:Business)=>{const status=item.status==='active'?'suspended':'active';await adminApi.patch(`/api/v1/admin/businesses/${item.id}/status`,{status});setBusinesses(all=>all.map(value=>value.id===item.id?{...value,status}:value))};
+  const create=async(event:FormEvent<HTMLFormElement>)=>{event.preventDefault();const value=Object.fromEntries(new FormData(event.currentTarget));const result=await adminApi.post<{data:Business}>('/api/v1/admin/businesses',{displayName:String(value.displayName),publicSlug:String(value.publicSlug),businessType:String(value.businessType),email:String(value.email)||undefined});setBusinesses(all=>[result.data,...all]);setModal(false)};
+  let page;if(path==='/empresas')page=<section className="panel"><SectionTitle title="Empresas da plataforma" description="Dados reais protegidos por MFA."/>{businesses.length?<table className="admin-table"><thead><tr><th>Empresa</th><th>Segmento</th><th>Status</th><th>Ação</th></tr></thead><tbody>{businesses.map(item=><tr key={item.id}><td><strong>{item.displayName}</strong><br/><small>{item.publicSlug}</small></td><td>{item.businessType}</td><td><Pill tone={item.status==='active'?'success':'warning'}>{item.status}</Pill></td><td><div className="admin-actions"><button onClick={()=>void toggle(item)}>{item.status==='active'?'Suspender':'Ativar'}</button></div></td></tr>)}</tbody></table>:<EmptyState title="Nenhuma empresa" description="Cadastre a primeira empresa."/>}</section>;
+  else if(path==='/planos')page=<div className="feature-grid">{plans.map(plan=><article className="feature-card" key={plan.id}><Pill tone="brand">{plan.name}</Pill><h2>R$ {Number(plan.priceMonthly).toLocaleString('pt-BR',{minimumFractionDigits:2})}</h2><p>{plan.code}</p></article>)}</div>;
+  else if(path==='/auditoria')page=<section className="panel"><SectionTitle title="Trilha de auditoria"/>{audit.map(item=><div className="activity-item" key={item.id}><div className="activity-dot"/><div><strong>{item.action}</strong><span>{item.entityType??'plataforma'} · {new Date(item.createdAt).toLocaleString('pt-BR')}</span></div></div>)}{!audit.length?<EmptyState title="Nenhum evento" description="Eventos protegidos aparecerão aqui."/>:null}</section>;
+  else if(['/consumo','/financeiro','/incidentes'].includes(path))page=<section className="panel"><SectionTitle title={routes.find(([key])=>key===path)?.[1]??'Operação'}/><EmptyState title="Sem registros" description="Nenhum dado real foi registrado para esta área."/></section>;
+  else if(path==='/configuracoes')page=<section className="panel"><SectionTitle title="Segurança"/><div className="switch"><div><strong>MFA obrigatório</strong><p>Exigido pelo backend para Master Admin.</p></div><input type="checkbox" checked readOnly aria-label="MFA obrigatório"/></div></section>;
+  else page=<><section className="grid"><Metric label="Empresas ativas" value={String(active)}/><Metric label="Suspensas" value={String(businesses.length-active)}/><Metric label="Planos ativos" value={String(plans.filter(item=>item.active).length)}/><Metric label="Eventos" value={String(audit.length)}/></section><section className="panel"><SectionTitle title="Saúde operacional" description="API, banco e autenticação administrativa conectados."/></section></>;
+  return <Shell title={routes.find(([key])=>key===path)?.[1]??'Resumo'} subtitle="Administração segura da plataforma Nexoio." nav={<nav className="admin-nav">{routes.map(([key,label])=><button key={key} className={path===key?'active':''} onClick={()=>go(key)}>{label}</button>)}</nav>} actions={<Button onClick={()=>setModal(true)}>Nova empresa</Button>}>{error?<p role="alert">{error}</p>:null}{page}{modal?<div className="admin-modal" onMouseDown={event=>event.currentTarget===event.target&&setModal(false)}><section role="dialog" aria-modal="true"><h2>Nova empresa</h2><form onSubmit={event=>void create(event)}><div className="admin-form"><label>Nome<input name="displayName" required/></label><label>Slug<input name="publicSlug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required/></label><label>Segmento<select name="businessType"><option value="other">Outro</option><option value="restaurant">Restaurante</option><option value="retail">Varejo</option><option value="clinic">Clínica</option></select></label><label>E-mail<input name="email" type="email"/></label></div><footer><Button type="button" ghost onClick={()=>setModal(false)}>Cancelar</Button><Button type="submit">Criar</Button></footer></form></section></div>:null}</Shell>;
 }

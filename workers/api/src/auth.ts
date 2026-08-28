@@ -28,7 +28,7 @@ const authAccountsV17 = pgTable('auth_accounts', {
 
 function parseSender(value: string) {
   const match = value.match(/^\s*(.*?)\s*<([^<>]+)>\s*$/);
-  if (match) return { name: match[1] || 'Nexoio', email: match[2].trim() };
+  if (match) return { name: match[1] || 'Nexoio', email: match[2]!.trim() };
   return { name: 'Nexoio', email: value.trim() };
 }
 
