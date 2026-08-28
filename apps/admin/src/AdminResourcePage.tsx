@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { EmptyState, Pill, SectionTitle } from '@nexoio/ui';
+import { EmptyState, Pill, SectionTitle, formatCurrency, formatDateTime, formatEmpty } from '@nexoio/ui';
 import { adminApi } from './lib/api';
 
 type Definition={endpoint:string;title:string;description:string;columns:Record<string,string>};
@@ -14,6 +14,6 @@ const definitions:Record<string,Definition>={
   '/financeiro':{endpoint:'finance',title:'Financeiro',description:'Assinaturas e valores recorrentes da plataforma.',columns:{businessName:'Empresa',planName:'Plano',status:'Situação',monthlyValue:'Valor mensal',currentPeriodEnd:'Próxima renovação'}},
   '/incidentes':{endpoint:'incidents',title:'Incidentes',description:'Falhas operacionais identificadas pela auditoria.',columns:{createdAt:'Ocorrido em',severity:'Severidade',action:'Evento',entityType:'Área',requestId:'Código da requisição'}},
 };
-const format=(key:string,value:unknown)=>{if(value===true)return'Sim';if(value===false)return'Não';if(value===null||value===undefined||value==='')return'—';if(key.toLowerCase().includes('at')||key==='currentPeriodEnd')return new Date(String(value)).toLocaleString('pt-BR');if(key==='monthlyValue')return Number(value).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});return String(value)};
+const format=(key:string,value:unknown)=>{if(value===true)return'Sim';if(value===false)return'Não';if(value===null||value===undefined||value==='')return'—';if(key.toLowerCase().includes('at')||key==='currentPeriodEnd')return formatDateTime(String(value));if(key==='monthlyValue')return formatCurrency(String(value));return formatEmpty(value)};
 export function AdminResourcePage({path}:{path:string}){const definition=definitions[path]!;const[rows,setRows]=useState<Array<Record<string,unknown>>>([]);const[error,setError]=useState('');useEffect(()=>{adminApi.get<{data:Array<Record<string,unknown>>}>(`/api/v1/admin/${definition.endpoint}`).then(result=>setRows(result.data)).catch(reason=>setError(reason instanceof Error?reason.message:'Falha ao carregar'))},[definition.endpoint]);const columns=Object.entries(definition.columns);return <section className="panel"><SectionTitle title={definition.title} description={definition.description}/>{error?<p role="alert">{error}</p>:rows.length?<div className="table-shell"><table className="admin-table"><thead><tr>{columns.map(([key,label])=><th key={key}>{label}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={String(row.id??row.businessId??index)}>{columns.map(([key])=><td key={key}>{key.toLowerCase().includes('status')||key==='severity'?<Pill>{format(key,row[key])}</Pill>:format(key,row[key])}</td>)}</tr>)}</tbody></table></div>:<EmptyState title="Nenhum registro" description="Ainda não existem dados nesta área."/>}</section>}
 export const adminResourcePaths=new Set(Object.keys(definitions));
