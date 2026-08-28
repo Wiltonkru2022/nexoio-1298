@@ -2,7 +2,7 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { createMiddleware } from 'hono/factory';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { auditLogs, businesses, plans, platformAdmins, subscriptions, users } from '@nexoio/db';
+import { auditLogs, authUsers, businessDomains, businessPublicProfiles, businesses, modules, plans, platformAdmins, subscriptions, users } from '@nexoio/db';
 import { error, requireSession } from '../middleware';
 import type { ApiEnv } from '../types';
 
@@ -15,3 +15,9 @@ adminRoutes.patch('/businesses/:id/status',async c=>{const parsed=z.object({stat
 adminRoutes.patch('/businesses/:id/plan',async c=>{const parsed=z.object({planId:z.uuid()}).safeParse(await c.req.json().catch(()=>null));if(!parsed.success)return error(c,422,'VALIDATION_ERROR','Plano inválido');const[row]=await c.get('db').update(subscriptions).set({planId:parsed.data.planId,updatedAt:new Date()}).where(eq(subscriptions.businessId,c.req.param('id'))).returning();return c.json({data:row??null})});
 adminRoutes.get('/audit',async c=>c.json({data:await c.get('db').select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(200)}));
 adminRoutes.get('/plans',async c=>c.json({data:await c.get('db').select().from(plans).orderBy(plans.priceMonthly)}));
+adminRoutes.get('/subscriptions',async c=>c.json({data:await c.get('db').select({id:subscriptions.id,status:subscriptions.status,businessId:subscriptions.businessId,businessName:businesses.displayName,planName:plans.name,currentPeriodEnd:subscriptions.currentPeriodEnd}).from(subscriptions).innerJoin(businesses,eq(businesses.id,subscriptions.businessId)).innerJoin(plans,eq(plans.id,subscriptions.planId)).limit(200)}));
+adminRoutes.get('/domains',async c=>c.json({data:await c.get('db').select({id:businessDomains.id,hostname:businessDomains.hostname,verificationStatus:businessDomains.verificationStatus,sslStatus:businessDomains.sslStatus,businessName:businesses.displayName}).from(businessDomains).innerJoin(businesses,eq(businesses.id,businessDomains.businessId)).limit(200)}));
+adminRoutes.get('/sites',async c=>c.json({data:await c.get('db').select({businessId:businessPublicProfiles.businessId,businessName:businesses.displayName,slug:businesses.publicSlug,published:businessPublicProfiles.published,updatedAt:businessPublicProfiles.updatedAt}).from(businessPublicProfiles).innerJoin(businesses,eq(businesses.id,businessPublicProfiles.businessId)).limit(200)}));
+adminRoutes.get('/users',async c=>c.json({data:await c.get('db').select({id:authUsers.id,name:authUsers.name,email:authUsers.email,emailVerified:authUsers.emailVerified,twoFactorEnabled:authUsers.twoFactorEnabled,createdAt:authUsers.createdAt}).from(authUsers).orderBy(desc(authUsers.createdAt)).limit(200)}));
+adminRoutes.get('/modules',async c=>c.json({data:await c.get('db').select().from(modules).orderBy(modules.name)}));
+adminRoutes.get('/templates',c=>c.json({data:['beauty-01','restaurant-01','restaurant-02','store-01','service-01','clinic-01','generic-01','premium-01'].map(id=>({id,status:'active'}))}));

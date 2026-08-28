@@ -1,7 +1,7 @@
 export const PERMISSIONS = [
   'customers.read','customers.create','customers.update','customers.delete','products.read','products.write',
   'services.read','services.write','sales.read','sales.create','sales.cancel','cash.read','cash.open','cash.close','cash.withdraw','cash.adjust',
-  'finance.read','finance.create','finance.export','appointments.read','appointments.write','team.read','team.invite','team.update','team.remove','users.read','users.manage','settings.read','settings.update','settings.manage','modules.read','modules.update','orders.read','orders.write','inventory.read','inventory.write','service_orders.read','service_orders.write','patients.read','patients.write','patients.sensitive.read','reports.read'
+  'finance.read','finance.create','finance.export','appointments.read','appointments.write','team.read','team.invite','team.update','team.remove','users.read','users.manage','settings.read','settings.update','settings.manage','modules.read','modules.update','public_site.read','public_site.update','public_site.publish','orders.read','orders.write','inventory.read','inventory.write','service_orders.read','service_orders.write','patients.read','patients.write','patients.sensitive.read','reports.read'
 ] as const;
 export type Permission = typeof PERMISSIONS[number];
 export type PermissionKey = Permission;

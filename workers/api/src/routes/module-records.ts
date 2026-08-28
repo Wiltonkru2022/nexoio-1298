@@ -1,24 +1,10 @@
 import { and, desc, eq } from 'drizzle-orm';
-import { jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { businessModules } from '@nexoio/db';
+import { businessModules, moduleRecords } from '@nexoio/db';
 import { MODULES, uuidv7 } from '@nexoio/core';
 import { error } from '../middleware';
 import type { ApiEnv } from '../types';
-
-const moduleRecords = pgTable('module_records', {
-  id: uuid().primaryKey(),
-  businessId: uuid('business_id').notNull(),
-  moduleCode: text('module_code').notNull(),
-  name: text().notNull(),
-  details: text(),
-  status: text().notNull().default('active'),
-  dataJson: jsonb('data_json').notNull().default({}),
-  createdBy: uuid('created_by'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
 
 const moduleKeySchema = z.enum(MODULES);
 const createSchema = z.object({

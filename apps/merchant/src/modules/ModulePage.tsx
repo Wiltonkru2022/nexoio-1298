@@ -1,81 +1,62 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, EmptyState, Pill } from '@nexoio/ui';
 import { ContentCard } from '../components/ContentCard';
 import { Field, Modal } from '../components/Modal';
 import { PageHeader } from '../components/PageHeader';
 import { api, ApiError } from '../lib/api';
 
-type ModuleRecord = {
-  id: string;
-  name: string;
-  details: string | null;
-  status: string;
-  createdAt: string;
+type ModuleRecord={id:string;name:string;details:string|null;status:string;dataJson:Record<string,unknown>;createdAt:string};
+type FieldConfig={name:string;label:string;type?:string;required?:boolean;options?:string[];relation?:'tables'|'commands'};
+type ModuleConfig={recordName:string;nameLabel:string;fields:FieldConfig[];statuses:string[]};
+const configs:Record<string,ModuleConfig>={
+  orders:{recordName:'pedido',nameLabel:'Identificação do pedido',fields:[{name:'commandId',label:'Comanda vinculada',relation:'commands'},{name:'items',label:'Itens do pedido',required:true},{name:'total',label:'Valor total',type:'number',required:true}],statuses:['Novo','Confirmado','Em preparo','Pronto','Entregue','Cancelado']},
+  tables:{recordName:'mesa',nameLabel:'Número ou nome da mesa',fields:[{name:'capacity',label:'Capacidade',type:'number',required:true},{name:'area',label:'Área do salão'}],statuses:['Livre','Ocupada','Reservada','Indisponível']},
+  commands:{recordName:'comanda',nameLabel:'Número da comanda',fields:[{name:'tableId',label:'Mesa vinculada',relation:'tables',required:true},{name:'customer',label:'Cliente ou responsável'},{name:'guests',label:'Quantidade de pessoas',type:'number',required:true}],statuses:['Aberta','Em atendimento','Aguardando pagamento','Fechada','Cancelada']},
+  menu:{recordName:'item do cardápio',nameLabel:'Nome do item',fields:[{name:'category',label:'Categoria',required:true},{name:'price',label:'Preço',type:'number',required:true},{name:'preparation',label:'Tempo de preparo (minutos)',type:'number'}],statuses:['Disponível','Indisponível']},
+  kitchen:{recordName:'produção',nameLabel:'Pedido ou item',fields:[{name:'station',label:'Praça de preparo'},{name:'priority',label:'Prioridade',options:['Normal','Alta','Urgente']}],statuses:['Na fila','Em preparo','Pronto','Entregue']},
+  delivery:{recordName:'entrega',nameLabel:'Cliente da entrega',fields:[{name:'address',label:'Endereço',required:true},{name:'courier',label:'Entregador'},{name:'fee',label:'Taxa de entrega',type:'number'}],statuses:['Aguardando','Em rota','Entregue','Cancelada']},
+  inventory:{recordName:'movimento de estoque',nameLabel:'Produto',fields:[{name:'movement',label:'Movimento',options:['Entrada','Saída','Ajuste'],required:true},{name:'quantity',label:'Quantidade',type:'number',required:true},{name:'reason',label:'Motivo'}],statuses:['Confirmado','Pendente']},
+  service_orders:{recordName:'ordem de serviço',nameLabel:'Equipamento ou assunto',fields:[{name:'customer',label:'Cliente',required:true},{name:'problem',label:'Problema relatado',required:true},{name:'estimate',label:'Valor estimado',type:'number'}],statuses:['Aberta','Em análise','Aguardando aprovação','Em reparo','Concluída','Entregue','Cancelada']},
+  equipment:{recordName:'equipamento',nameLabel:'Equipamento',fields:[{name:'customer',label:'Cliente',required:true},{name:'brand',label:'Marca'},{name:'serial',label:'Número de série'}],statuses:['Ativo','Em manutenção','Inativo']},
+  quotes:{recordName:'orçamento',nameLabel:'Título do orçamento',fields:[{name:'customer',label:'Cliente',required:true},{name:'value',label:'Valor',type:'number',required:true},{name:'validUntil',label:'Validade',type:'date'}],statuses:['Rascunho','Enviado','Aprovado','Recusado','Expirado']},
+  suppliers:{recordName:'fornecedor',nameLabel:'Razão social ou nome',fields:[{name:'document',label:'CNPJ/CPF'},{name:'phone',label:'Telefone',type:'tel'},{name:'email',label:'E-mail',type:'email'}],statuses:['Ativo','Inativo']},
+  classes:{recordName:'turma',nameLabel:'Nome da turma',fields:[{name:'teacher',label:'Professor',required:true},{name:'schedule',label:'Dias e horário',required:true},{name:'capacity',label:'Vagas',type:'number'}],statuses:['Aberta','Lotada','Encerrada']},
+  checkin:{recordName:'entrada',nameLabel:'Aluno',fields:[{name:'plan',label:'Plano'},{name:'time',label:'Horário',type:'time'}],statuses:['Liberado','Bloqueado']},
+  plans:{recordName:'plano',nameLabel:'Nome do plano',fields:[{name:'price',label:'Mensalidade',type:'number',required:true},{name:'duration',label:'Duração (meses)',type:'number'}],statuses:['Ativo','Inativo']},
+  patients:{recordName:'paciente',nameLabel:'Nome do paciente',fields:[{name:'phone',label:'Telefone',type:'tel'},{name:'birthDate',label:'Data de nascimento',type:'date'},{name:'notes',label:'Observações clínicas'}],statuses:['Ativo','Inativo']},
+  procedures:{recordName:'procedimento',nameLabel:'Nome do procedimento',fields:[{name:'duration',label:'Duração (minutos)',type:'number'},{name:'price',label:'Valor',type:'number'},{name:'preparation',label:'Preparo necessário'}],statuses:['Ativo','Inativo']},
+  professionals:{recordName:'profissional',nameLabel:'Nome do profissional',fields:[{name:'specialty',label:'Especialidade',required:true},{name:'registration',label:'Registro profissional'}],statuses:['Ativo','Inativo']},
+  commissions:{recordName:'regra de comissão',nameLabel:'Nome da regra',fields:[{name:'professional',label:'Profissional ou função',required:true},{name:'percentage',label:'Percentual',type:'number',required:true},{name:'appliesTo',label:'Serviços ou produtos aplicáveis'}],statuses:['Ativa','Inativa']},
+  business_hours:{recordName:'horário',nameLabel:'Dia ou período',fields:[{name:'opensAt',label:'Abertura',type:'time'},{name:'closesAt',label:'Fechamento',type:'time'},{name:'break',label:'Intervalo'}],statuses:['Aberto','Fechado','Horário especial']},
+  categories:{recordName:'categoria',nameLabel:'Nome da categoria',fields:[{name:'description',label:'Descrição'},{name:'order',label:'Ordem de exibição',type:'number'}],statuses:['Ativa','Inativa']},
+  addons:{recordName:'adicional',nameLabel:'Nome do adicional',fields:[{name:'price',label:'Preço adicional',type:'number',required:true},{name:'appliesTo',label:'Itens aplicáveis'}],statuses:['Disponível','Indisponível']},
+  combos:{recordName:'combo',nameLabel:'Nome do combo',fields:[{name:'items',label:'Itens incluídos',required:true},{name:'price',label:'Preço do combo',type:'number',required:true}],statuses:['Disponível','Indisponível']},
+  pickup:{recordName:'pedido para retirada',nameLabel:'Cliente ou código',fields:[{name:'readyAt',label:'Previsão de retirada',type:'time'},{name:'items',label:'Itens',required:true}],statuses:['Recebido','Em preparo','Pronto','Retirado','Cancelado']},
+  coupons:{recordName:'cupom',nameLabel:'Código do cupom',fields:[{name:'discount',label:'Desconto',type:'number',required:true},{name:'expiresAt',label:'Validade',type:'date'}],statuses:['Ativo','Pausado','Expirado']},
+  delivery_fees:{recordName:'taxa de entrega',nameLabel:'Bairro ou região',fields:[{name:'fee',label:'Valor da taxa',type:'number',required:true},{name:'minimum',label:'Pedido mínimo',type:'number'}],statuses:['Ativa','Inativa']},
+  variations:{recordName:'variação',nameLabel:'Nome da variação',fields:[{name:'product',label:'Produto',required:true},{name:'options',label:'Opções',required:true},{name:'priceDifference',label:'Diferença de preço',type:'number'}],statuses:['Ativa','Inativa']},
+  parts:{recordName:'peça',nameLabel:'Nome da peça',fields:[{name:'code',label:'Código'},{name:'quantity',label:'Quantidade',type:'number'},{name:'cost',label:'Custo',type:'number'}],statuses:['Disponível','Estoque baixo','Indisponível']},
+  warranties:{recordName:'garantia',nameLabel:'Serviço ou equipamento',fields:[{name:'customer',label:'Cliente',required:true},{name:'expiresAt',label:'Válida até',type:'date',required:true},{name:'coverage',label:'Cobertura'}],statuses:['Vigente','Expirada','Utilizada']},
+  students:{recordName:'aluno',nameLabel:'Nome do aluno',fields:[{name:'phone',label:'Telefone',type:'tel'},{name:'plan',label:'Plano'},{name:'responsible',label:'Responsável'}],statuses:['Ativo','Pausado','Inativo']},
+  memberships:{recordName:'mensalidade',nameLabel:'Aluno',fields:[{name:'plan',label:'Plano',required:true},{name:'amount',label:'Valor',type:'number',required:true},{name:'dueDate',label:'Vencimento',type:'date'}],statuses:['Paga','Pendente','Vencida']},
+  teachers:{recordName:'professor',nameLabel:'Nome do professor',fields:[{name:'specialty',label:'Modalidade',required:true},{name:'schedule',label:'Disponibilidade'}],statuses:['Ativo','Inativo']},
+  notices:{recordName:'aviso',nameLabel:'Título do aviso',fields:[{name:'audience',label:'Público',options:['Todos','Alunos','Equipe']},{name:'message',label:'Mensagem',required:true}],statuses:['Publicado','Rascunho','Arquivado']},
+  medical_records:{recordName:'registro de prontuário',nameLabel:'Paciente',fields:[{name:'professional',label:'Profissional',required:true},{name:'notes',label:'Evolução e observações',required:true}],statuses:['Assinado','Rascunho']},
+  insurance:{recordName:'convênio',nameLabel:'Nome do convênio',fields:[{name:'code',label:'Código'},{name:'coverage',label:'Cobertura e regras'}],statuses:['Ativo','Inativo']},
+  documents:{recordName:'documento',nameLabel:'Nome do documento',fields:[{name:'patient',label:'Paciente'},{name:'documentType',label:'Tipo',required:true},{name:'reference',label:'Referência do arquivo'}],statuses:['Válido','Pendente','Expirado']},
+  promotions:{recordName:'promoção',nameLabel:'Nome da promoção',fields:[{name:'offer',label:'Oferta',required:true},{name:'startsAt',label:'Início',type:'date'},{name:'endsAt',label:'Fim',type:'date'}],statuses:['Ativa','Agendada','Encerrada']},
+  barcode:{recordName:'código de barras',nameLabel:'Produto',fields:[{name:'code',label:'Código',required:true},{name:'unit',label:'Unidade'}],statuses:['Ativo','Inativo']},
 };
+const fallback:ModuleConfig={recordName:'registro',nameLabel:'Nome ou identificação',fields:[{name:'notes',label:'Informações adicionais'}],statuses:['Ativo','Inativo']};
 
-export function ModulePage({ moduleKey, title, description, statuses = ['Ativo'] }: { moduleKey: string; title: string; description: string; statuses?: string[] }) {
-  const [items, setItems] = useState<ModuleRecord[]>([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await api.get<{ data: ModuleRecord[] }>(`/api/v1/module-records/${encodeURIComponent(moduleKey)}`);
-      setItems(response.data);
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Não foi possível carregar os dados.');
-    } finally {
-      setLoading(false);
-    }
-  }, [moduleKey]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    const form = new FormData(event.currentTarget);
-    try {
-      await api.post(`/api/v1/module-records/${encodeURIComponent(moduleKey)}`, {
-        name: String(form.get('name') ?? ''),
-        details: String(form.get('details') ?? ''),
-        status: String(form.get('status') ?? statuses[0] ?? 'Ativo'),
-      });
-      setOpen(false);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Não foi possível salvar o registro.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const remove = async (id: string) => {
-    if (!confirm('Remover este registro?')) return;
-    try {
-      await api.delete(`/api/v1/module-records/${encodeURIComponent(moduleKey)}/${id}`);
-      setItems((current) => current.filter((item) => item.id !== id));
-    } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'Não foi possível remover o registro.');
-    }
-  };
-
-  return <>
-    <PageHeader title={title} description={description} action={<Button onClick={() => setOpen(true)}>Novo registro</Button>} />
-    <ContentCard title={`Registros de ${title}`} description="Dados salvos no Neon e isolados pela empresa ativa.">
-      {error ? <div className="auth-notice error" role="alert">{error} <button onClick={() => void load()}>Tentar novamente</button></div> : null}
-      {loading ? <div className="empty-state"><h3>Carregando…</h3><p>Buscando dados da empresa ativa.</p></div> : items.length ? <div className="table-shell"><table><thead><tr><th>Nome</th><th>Detalhes</th><th>Status</th><th></th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td><strong>{item.name}</strong></td><td>{item.details || '—'}</td><td><Pill tone="brand">{item.status}</Pill></td><td className="row-actions"><button onClick={() => void remove(item.id)}>Remover</button></td></tr>)}</tbody></table></div> : <EmptyState title={`Nenhum registro em ${title}`} description="Use o botão para criar o primeiro registro." action={<Button onClick={() => setOpen(true)}>Novo registro</Button>} />}
-    </ContentCard>
-    <Modal open={open} onClose={() => !saving && setOpen(false)} onSubmit={submit} title={`Novo registro — ${title}`}>
-      <Field label="Nome/identificação" name="name" required />
-      <Field label="Detalhes" name="details" required />
-      <Field label="Status" name="status"><select name="status">{statuses.map((status) => <option key={status}>{status}</option>)}</select></Field>
-      {saving ? <div className="auth-notice">Salvando no Neon…</div> : null}
-    </Modal>
-  </>;
+export function ModulePage({moduleKey,title,description,statuses}:{moduleKey:string;title:string;description:string;statuses?:string[]}){
+  const config=configs[moduleKey]??{...fallback,statuses:statuses??fallback.statuses};
+  const[items,setItems]=useState<ModuleRecord[]>([]);const[related,setRelated]=useState<Record<string,ModuleRecord[]>>({});const[open,setOpen]=useState(false);const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[error,setError]=useState('');
+  const relations=useMemo(()=>[...new Set(config.fields.flatMap(field=>field.relation?[field.relation]:[]))],[config.fields]);
+  const load=useCallback(async()=>{setLoading(true);setError('');try{const [main,...dependencies]=await Promise.all([api.get<{data:ModuleRecord[]}>(`/api/v1/module-records/${encodeURIComponent(moduleKey)}`),...relations.map(key=>api.get<{data:ModuleRecord[]}>(`/api/v1/module-records/${key}`))]);setItems(main.data);setRelated(Object.fromEntries(relations.map((key,index)=>[key,dependencies[index]?.data??[]])))}catch(reason){setError(reason instanceof ApiError?reason.message:'Não foi possível carregar os dados.')}finally{setLoading(false)}},[moduleKey,relations]);
+  useEffect(()=>{void load()},[load]);
+  const submit=async(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();setSaving(true);setError('');const form=new FormData(event.currentTarget);const data=Object.fromEntries(config.fields.map(field=>[field.name,String(form.get(field.name)??'')]));try{await api.post(`/api/v1/module-records/${encodeURIComponent(moduleKey)}`,{name:String(form.get('name')??''),details:String(form.get('details')??''),status:String(form.get('status')??config.statuses[0]),data});setOpen(false);await load()}catch(reason){setError(reason instanceof ApiError?reason.message:'Não foi possível salvar.')}finally{setSaving(false)}};
+  const remove=async(id:string)=>{if(!confirm(`Remover este ${config.recordName}?`))return;try{await api.delete(`/api/v1/module-records/${encodeURIComponent(moduleKey)}/${id}`);setItems(current=>current.filter(item=>item.id!==id))}catch(reason){setError(reason instanceof ApiError?reason.message:'Não foi possível remover.')}};
+  const detail=(item:ModuleRecord)=>{const values=config.fields.map(field=>{const raw=item.dataJson?.[field.name];if(!raw)return null;const linked=field.relation?related[field.relation]?.find(record=>record.id===raw)?.name:null;return `${field.label}: ${linked??String(raw)}`}).filter(Boolean);return values.join(' · ')||item.details||'Sem informações adicionais'};
+  return <><PageHeader title={title} description={description} action={<Button onClick={()=>setOpen(true)}>Novo {config.recordName}</Button>}/><ContentCard title={`${title} cadastrados`} description="Informações integradas e isoladas por empresa.">{error?<div className="auth-notice error" role="alert">{error} <button onClick={()=>void load()}>Tentar novamente</button></div>:null}{loading?<div className="empty-state"><h3>Carregando…</h3><p>Buscando informações da empresa.</p></div>:items.length?<div className="table-shell"><table><thead><tr><th>Identificação</th><th>Informações</th><th>Situação</th><th>Ações</th></tr></thead><tbody>{items.map(item=><tr key={item.id}><td><strong>{item.name}</strong></td><td>{detail(item)}</td><td><Pill tone="brand">{item.status}</Pill></td><td className="row-actions"><button onClick={()=>void remove(item.id)}>Remover</button></td></tr>)}</tbody></table></div>:<EmptyState title={`Nenhum ${config.recordName} cadastrado`} description={`Cadastre o primeiro ${config.recordName} para iniciar esta operação.`} action={<Button onClick={()=>setOpen(true)}>Novo {config.recordName}</Button>}/>}</ContentCard><Modal open={open} onClose={()=>!saving&&setOpen(false)} onSubmit={submit} title={`Novo ${config.recordName}`} submitLabel="Salvar"><Field label={config.nameLabel} name="name" required/>{config.fields.map(field=><Field key={field.name} label={field.label} name={field.name} type={field.type} required={field.required}>{field.options?<select name={field.name} required={field.required}><option value="">Selecione</option>{field.options.map(option=><option key={option}>{option}</option>)}</select>:field.relation?<select name={field.name} required={field.required}><option value="">Selecione</option>{(related[field.relation]??[]).map(record=><option value={record.id} key={record.id}>{record.name}</option>)}</select>:undefined}</Field>)}<Field label="Observações" name="details"/><Field label="Situação" name="status"><select name="status">{config.statuses.map(status=><option key={status}>{status}</option>)}</select></Field>{saving?<div className="auth-notice">Salvando…</div>:null}</Modal></>;
 }

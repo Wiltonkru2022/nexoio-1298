@@ -1,0 +1,5 @@
+import { Button } from '@nexoio/ui';
+import { AuthCard, AuthLayout } from '../../auth/components';
+import type { ProductMode, StepProps } from '../types';
+const choices:Array<{key:ProductMode;title:string;text:string}>=[{key:'full_system',title:'Sistema completo',text:'Gestão operacional, equipe, financeiro e página pública conforme o segmento.'},{key:'site_only',title:'Apenas site ou landing page',text:'Editor visual, subdomínio, WhatsApp, endereço, conteúdo e publicação.'}];
+export function ProductModePage({data,update,next,back}:StepProps){return <AuthLayout><AuthCard title="O que você quer usar na Nexoio?" description="Você poderá evoluir o plano depois sem refazer o site."><div className="onboarding-grid">{choices.map(choice=><button type="button" key={choice.key} className={`segment-option ${data.productMode===choice.key?'active':''}`} onClick={()=>update({productMode:choice.key})}><strong>{choice.title}</strong><small>{choice.text}</small></button>)}</div><div className="actions"><Button ghost onClick={back}>Voltar</Button><Button onClick={next}>Continuar</Button></div></AuthCard></AuthLayout>}

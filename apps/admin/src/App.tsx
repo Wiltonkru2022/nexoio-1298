@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Button, EmptyState, Metric, Pill, SectionTitle, Shell } from '@nexoio/ui';
 import { adminApi } from './lib/api';
+import { AdminResourcePage, adminResourcePaths } from './AdminResourcePage';
 import './admin.css';
 
 type Business={id:string;displayName:string;publicSlug:string;businessType:string;status:string;createdAt:string};
 type Audit={id:string;action:string;entityType:string|null;createdAt:string};
 type Plan={id:string;name:string;code:string;priceMonthly:string;active:boolean};
-const routes=[['/','Resumo'],['/empresas','Empresas'],['/planos','Planos'],['/consumo','Consumo'],['/financeiro','Financeiro'],['/auditoria','Auditoria'],['/incidentes','Incidentes'],['/configuracoes','Configurações']] as const;
+const routes=[['/','Resumo'],['/empresas','Empresas'],['/planos','Planos'],['/assinaturas','Assinaturas'],['/consumo','Consumo'],['/dominios','Domínios'],['/sites','Sites'],['/usuarios','Usuários'],['/modulos','Módulos'],['/templates','Modelos'],['/financeiro','Financeiro'],['/auditoria','Auditoria'],['/incidentes','Incidentes'],['/configuracoes','Configurações']] as const;
 
 export function App(){
   const[path,setPath]=useState(location.pathname);const[businesses,setBusinesses]=useState<Business[]>([]);const[plans,setPlans]=useState<Plan[]>([]);const[audit,setAudit]=useState<Audit[]>([]);const[error,setError]=useState('');const[modal,setModal]=useState(false);
@@ -17,6 +18,7 @@ export function App(){
   let page;if(path==='/empresas')page=<section className="panel"><SectionTitle title="Empresas da plataforma" description="Dados reais protegidos por MFA."/>{businesses.length?<table className="admin-table"><thead><tr><th>Empresa</th><th>Segmento</th><th>Status</th><th>Ação</th></tr></thead><tbody>{businesses.map(item=><tr key={item.id}><td><strong>{item.displayName}</strong><br/><small>{item.publicSlug}</small></td><td>{item.businessType}</td><td><Pill tone={item.status==='active'?'success':'warning'}>{item.status}</Pill></td><td><div className="admin-actions"><button onClick={()=>void toggle(item)}>{item.status==='active'?'Suspender':'Ativar'}</button></div></td></tr>)}</tbody></table>:<EmptyState title="Nenhuma empresa" description="Cadastre a primeira empresa."/>}</section>;
   else if(path==='/planos')page=<div className="feature-grid">{plans.map(plan=><article className="feature-card" key={plan.id}><Pill tone="brand">{plan.name}</Pill><h2>R$ {Number(plan.priceMonthly).toLocaleString('pt-BR',{minimumFractionDigits:2})}</h2><p>{plan.code}</p></article>)}</div>;
   else if(path==='/auditoria')page=<section className="panel"><SectionTitle title="Trilha de auditoria"/>{audit.map(item=><div className="activity-item" key={item.id}><div className="activity-dot"/><div><strong>{item.action}</strong><span>{item.entityType??'plataforma'} · {new Date(item.createdAt).toLocaleString('pt-BR')}</span></div></div>)}{!audit.length?<EmptyState title="Nenhum evento" description="Eventos protegidos aparecerão aqui."/>:null}</section>;
+  else if(adminResourcePaths.has(path))page=<AdminResourcePage path={path}/>;
   else if(['/consumo','/financeiro','/incidentes'].includes(path))page=<section className="panel"><SectionTitle title={routes.find(([key])=>key===path)?.[1]??'Operação'}/><EmptyState title="Sem registros" description="Nenhum dado real foi registrado para esta área."/></section>;
   else if(path==='/configuracoes')page=<section className="panel"><SectionTitle title="Segurança"/><div className="switch"><div><strong>MFA obrigatório</strong><p>Exigido pelo backend para Master Admin.</p></div><input type="checkbox" checked readOnly aria-label="MFA obrigatório"/></div></section>;
   else page=<><section className="grid"><Metric label="Empresas ativas" value={String(active)}/><Metric label="Suspensas" value={String(businesses.length-active)}/><Metric label="Planos ativos" value={String(plans.filter(item=>item.active).length)}/><Metric label="Eventos" value={String(audit.length)}/></section><section className="panel"><SectionTitle title="Saúde operacional" description="API, banco e autenticação administrativa conectados."/></section></>;
