@@ -12,14 +12,14 @@
     "staging": {
       "name": "nexoio-api-staging",
       "workers_dev": false,
-      "routes": [{ "pattern": "api-staging.nexoio.com.br/*", "zone_name": "nexoio.com.br" }],
+      "routes": [{ "pattern": "api-staging.nexoio.com.br", "custom_domain": true }],
       "vars": { "AUTH_URL": "https://api-staging.nexoio.com.br", "ALLOWED_ORIGINS": "https://app-staging.nexoio.com.br,https://admin-staging.nexoio.com.br" },
       "r2_buckets": [{ "binding": "R2_BUCKET", "bucket_name": "nexoio-staging" }]
     },
     "production": {
       "name": "nexoio-api",
       "workers_dev": false,
-      "routes": [{ "pattern": "api.nexoio.com.br/*", "zone_name": "nexoio.com.br" }],
+      "routes": [{ "pattern": "api.nexoio.com.br", "custom_domain": true }],
       "vars": { "AUTH_URL": "https://api.nexoio.com.br", "ALLOWED_ORIGINS": "https://app.nexoio.com.br,https://admin.nexoio.com.br" },
       "r2_buckets": [{ "binding": "R2_BUCKET", "bucket_name": "nexoio-prod" }]
     }
