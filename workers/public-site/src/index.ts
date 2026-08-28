@@ -16,7 +16,7 @@ const blockNames:Record<string,string>={hero:'Destaque',text:'Conteúdo',image:'
 const fonts=new Set(['Inter','Poppins','Montserrat','Playfair Display','system-ui']);
 const escape=(value:string)=>value.replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]!));
 const safeUrl=(value:string|undefined)=>{try{const url=new URL(value??'');return ['https:','http:'].includes(url.protocol)?url.toString():''}catch{return''}};
-const safeColor=(value:string|undefined,fallback:string)=>value&&/^#[0-9a-f]{6}$/i.test(value)?value:fallback;
+const safeColor=(value:string|null|undefined,fallback:string)=>value&&/^#[0-9a-f]{6}$/i.test(value)?value:fallback;
 const safeGradient=(value:string|undefined)=>value&&/^(?:linear|radial)-gradient\([#(),.%\sa-zA-Z0-9-]+\)$/.test(value)?value:'';
 const safeNumber=(value:number|undefined,fallback:number,min:number,max:number)=>Number.isFinite(value)?Math.min(max,Math.max(min,Number(value))):fallback;
 const safeAlignment=(value:string|undefined)=>value==='center'||value==='right'?value:'left';
