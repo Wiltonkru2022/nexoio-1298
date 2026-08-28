@@ -1,12 +1,32 @@
 import { betterAuth } from 'better-auth/minimal';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { twoFactor } from 'better-auth/plugins';
-import { createDb, authAccounts, authSessions, authTwoFactors, authUsers, authVerifications, users } from '@nexoio/db';
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { createDb, authSessions, authTwoFactors, authUsers, authVerifications, users } from '@nexoio/db';
 import { uuidv7 } from '@nexoio/core';
 import type { Bindings } from './types';
 
 type AuthSession = { user: { id: string; email: string; name: string; emailVerified: boolean; twoFactorEnabled?: boolean }; session: { id: string; expiresAt: Date } };
 export type AuthRuntime = { handler(request: Request): Promise<Response>; api: { getSession(input: { headers: Headers }): Promise<AuthSession | null> } };
+
+// Better Auth 1.7+ requires `issuer` on the account model. Keep the adapter
+// schema aligned with the physical auth_accounts table migrated by 0002.
+const authAccountsV17 = pgTable('auth_accounts', {
+  id: text().primaryKey(),
+  issuer: text().notNull(),
+  accountId: text('account_id').notNull(),
+  providerId: text('provider_id').notNull(),
+  userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  idToken: text('id_token'),
+  accessTokenExpiresAt: timestamp('access_token_expires_at', { withTimezone: true }),
+  refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { withTimezone: true }),
+  scope: text(),
+  password: text(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
 
 function parseSender(value: string) {
   const match = value.match(/^\s*(.*?)\s*<([^<>]+)>\s*$/);
@@ -51,9 +71,7 @@ export function createAuth(env: Bindings, executionCtx?: { waitUntil(promise: Pr
   return betterAuth({
     appName: 'Nexoio', baseURL: env.AUTH_URL, secret: env.AUTH_SECRET,
     trustedOrigins: env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()),
-    database: drizzleAdapter(db, { provider: 'pg', schema: { user: authUsers, session: authSessions, account: authAccounts, verification: authVerifications, twoFactor: authTwoFactors } }),
-    user: { changeEmail: { enabled: true } },
-    session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24, cookieCache: { enabled: true, maxAge: 300 } },
+    database: drizzleAdapter(db, { provider: 'pg', schema: { user: authUsers, session: authSessions, account: authAccountsV17, verification: authVerifications, twoFactor: authTwoFactors } }),
     emailVerification: { sendOnSignUp: true, sendOnSignIn: true, autoSignInAfterVerification: true, expiresIn: 3600, sendVerificationEmail: ({ user, url }) => sendLink(user.email, 'Verifique seu e-mail Nexoio', url) },
     emailAndPassword: { enabled: true, minPasswordLength: 12, maxPasswordLength: 128, requireEmailVerification: true, revokeSessionsOnPasswordReset: true, resetPasswordTokenExpiresIn: 3600, sendResetPassword: ({ user, url }) => sendLink(user.email, 'Redefina sua senha Nexoio', url) },
     rateLimit: { enabled: true, window: 60, max: 20 },
