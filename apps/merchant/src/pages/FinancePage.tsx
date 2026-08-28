@@ -1,15 +1,2 @@
-import { Button, EmptyState } from '@nexoio/ui';
-import { ContentCard } from '../components/ContentCard';
-import { PageHeader } from '../components/PageHeader';
-import { StatGrid } from '../components/StatGrid';
-
-export function FinancePage() {
-  return <>
-    <PageHeader title="Financeiro" description="Acompanhe receitas, despesas, contas e resultado financeiro da empresa." action={<Button>Nova movimentação</Button>} />
-    <StatGrid items={[{ label: 'Receitas do mês', value: 'R$ 0,00' }, { label: 'Despesas do mês', value: 'R$ 0,00' }, { label: 'Resultado', value: 'R$ 0,00' }, { label: 'A vencer', value: 'R$ 0,00' }]} />
-    <div className="merchant-two-columns">
-      <ContentCard title="Fluxo financeiro" description="Comparativo de entradas e saídas."><div className="mini-chart"><span style={{height:'28%'}}/><span style={{height:'46%'}}/><span style={{height:'36%'}}/><span style={{height:'62%'}}/><span style={{height:'51%'}}/><span style={{height:'78%'}}/><span style={{height:'66%'}}/></div></ContentCard>
-      <ContentCard title="Contas próximas" description="Pagamentos e recebimentos previstos."><EmptyState title="Nada vencendo agora" description="Contas a pagar e receber aparecerão aqui." /></ContentCard>
-    </div>
-  </>;
-}
+import { useState } from 'react';import { Button, EmptyState, Pill } from '@nexoio/ui';import { ContentCard } from '../components/ContentCard';import { Field, Modal } from '../components/Modal';import { PageHeader } from '../components/PageHeader';import { StatGrid } from '../components/StatGrid';import { formValues,useCollection } from '../hooks/useCollection';
+export function FinancePage(){const{items,add,remove}=useCollection('finance');const[open,setOpen]=useState(false);const create=(e:React.FormEvent<HTMLFormElement>)=>{add(formValues(e));setOpen(false)};const income=items.filter(x=>x.type==='Receita').reduce((s,x)=>s+Number(x.amount),0);const expense=items.filter(x=>x.type==='Despesa').reduce((s,x)=>s+Number(x.amount),0);return <><PageHeader title="Financeiro" description="Acompanhe receitas, despesas, contas e resultado financeiro." action={<Button onClick={()=>setOpen(true)}>Nova movimentação</Button>}/><StatGrid items={[{label:'Receitas',value:`R$ ${income.toFixed(2)}`},{label:'Despesas',value:`R$ ${expense.toFixed(2)}`},{label:'Resultado',value:`R$ ${(income-expense).toFixed(2)}`},{label:'Lançamentos',value:String(items.length)}]}/><ContentCard title="Lançamentos" description="Contas a pagar e receber organizadas.">{items.length?<div className="table-shell"><table><thead><tr><th>Descrição</th><th>Tipo</th><th>Vencimento</th><th>Valor</th><th></th></tr></thead><tbody>{items.map(x=><tr key={x.id}><td>{x.description}</td><td><Pill tone={x.type==='Receita'?'success':'danger'}>{x.type}</Pill></td><td>{x.dueDate}</td><td>R$ {Number(x.amount).toFixed(2)}</td><td className="row-actions"><button onClick={()=>remove(x.id)}>Excluir</button></td></tr>)}</tbody></table></div>:<EmptyState title="Nenhum lançamento" description="Registre receitas e despesas para visualizar seu resultado."/>}</ContentCard><Modal open={open} onClose={()=>setOpen(false)} onSubmit={create} title="Nova movimentação"><Field label="Descrição" name="description" required/><Field label="Valor" name="amount" type="number" required/><Field label="Tipo" name="type"><select name="type"><option>Receita</option><option>Despesa</option></select></Field><Field label="Vencimento" name="dueDate" type="date" required/></Modal></>}

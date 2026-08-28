@@ -1,16 +1,2 @@
-import { Button, Pill } from '@nexoio/ui';
-import { ContentCard } from '../components/ContentCard';
-import { PageHeader } from '../components/PageHeader';
-import { StatGrid } from '../components/StatGrid';
-
-const hours = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'];
-
-export function SchedulePage() {
-  return <>
-    <PageHeader title="Agenda" description="Organize horários, profissionais, serviços e disponibilidade." action={<Button>Novo agendamento</Button>} />
-    <StatGrid items={[{ label: 'Hoje', value: '0' }, { label: 'Confirmados', value: '0' }, { label: 'Pendentes', value: '0' }, { label: 'Disponibilidade', value: 'Livre', note: 'Sem conflitos' }]} />
-    <ContentCard title="Agenda de hoje" description="Visualização rápida dos horários disponíveis." action={<div className="toolbar"><button>‹</button><Pill tone="brand">Hoje</Pill><button>›</button></div>}>
-      <div className="schedule-grid">{hours.map((hour) => <div className="schedule-row" key={hour}><time>{hour}</time><button className="schedule-slot">Horário disponível</button></div>)}</div>
-    </ContentCard>
-  </>;
-}
+import { useState } from 'react';import { Button, Pill } from '@nexoio/ui';import { ContentCard } from '../components/ContentCard';import { Field, Modal } from '../components/Modal';import { PageHeader } from '../components/PageHeader';import { StatGrid } from '../components/StatGrid';import { formValues,useCollection } from '../hooks/useCollection';const hours=['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'];
+export function SchedulePage(){const{items,add,remove}=useCollection('appointments');const[open,setOpen]=useState(false);const[selected,setSelected]=useState('');const show=(hour='')=>{setSelected(hour);setOpen(true)};const create=(e:React.FormEvent<HTMLFormElement>)=>{add(formValues(e));setOpen(false)};return <><PageHeader title="Agenda" description="Organize horários, profissionais, serviços e disponibilidade." action={<Button onClick={()=>show()}>Novo agendamento</Button>}/><StatGrid items={[{label:'Hoje',value:String(items.length)},{label:'Confirmados',value:String(items.length)},{label:'Pendentes',value:'0'},{label:'Disponibilidade',value:`${Math.max(0,hours.length-items.length)} horários`}]}/><ContentCard title="Agenda de hoje" description="Clique em um horário para agendar." action={<Pill tone="brand">Hoje</Pill>}><div className="schedule-grid">{hours.map(hour=>{const appointment=items.find(x=>x.time===hour);return <div className="schedule-row" key={hour}><time>{hour}</time>{appointment?<button className="schedule-slot" onClick={()=>remove(appointment.id)}>{appointment.customer} · {appointment.service} (clique para cancelar)</button>:<button className="schedule-slot" onClick={()=>show(hour)}>Horário disponível</button>}</div>})}</div></ContentCard><Modal open={open} onClose={()=>setOpen(false)} onSubmit={create} title="Novo agendamento" submitLabel="Agendar"><Field label="Cliente" name="customer" required/><Field label="Serviço" name="service" required/><Field label="Horário" name="time" required><select name="time" defaultValue={selected} required><option value="">Selecione</option>{hours.map(x=><option key={x}>{x}</option>)}</select></Field><Field label="Profissional" name="professional" required/></Modal></>}

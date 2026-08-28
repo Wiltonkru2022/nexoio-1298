@@ -1,14 +1,2 @@
-import { Button, EmptyState } from '@nexoio/ui';
-import { ContentCard } from '../components/ContentCard';
-import { PageHeader } from '../components/PageHeader';
-import { StatGrid } from '../components/StatGrid';
-
-export function ProductsPage() {
-  return <>
-    <PageHeader title="Produtos" description="Controle catálogo, preços, estoque e disponibilidade dos seus produtos." action={<Button>Novo produto</Button>} />
-    <StatGrid items={[{ label: 'Produtos ativos', value: '0' }, { label: 'Estoque baixo', value: '0' }, { label: 'Sem estoque', value: '0' }, { label: 'Valor em estoque', value: 'R$ 0,00' }]} />
-    <ContentCard title="Catálogo de produtos" description="Gerencie itens vendidos ou utilizados no seu negócio." action={<div className="toolbar"><input placeholder="Buscar produto..."/><button>Categorias</button></div>}>
-      <div className="catalog-grid"><EmptyState title="Nenhum produto cadastrado" description="Adicione produtos e controle estoque, preço e disponibilidade." action={<Button>Novo produto</Button>} /></div>
-    </ContentCard>
-  </>;
-}
+import { useState } from 'react';import { Button, EmptyState, Pill } from '@nexoio/ui';import { ContentCard } from '../components/ContentCard';import { Field, Modal } from '../components/Modal';import { PageHeader } from '../components/PageHeader';import { StatGrid } from '../components/StatGrid';import { formValues,useCollection } from '../hooks/useCollection';
+export function ProductsPage(){const{items,add,remove}=useCollection('products');const[open,setOpen]=useState(false);const create=(e:React.FormEvent<HTMLFormElement>)=>{add(formValues(e));setOpen(false)};const value=items.reduce((sum,x)=>sum+Number(x.price||0)*Number(x.stock||0),0);return <><PageHeader title="Produtos" description="Controle catálogo, preços, estoque e disponibilidade dos seus produtos." action={<Button onClick={()=>setOpen(true)}>Novo produto</Button>}/><StatGrid items={[{label:'Produtos ativos',value:String(items.length)},{label:'Estoque baixo',value:String(items.filter(x=>Number(x.stock)<5).length)},{label:'Sem estoque',value:String(items.filter(x=>Number(x.stock)===0).length)},{label:'Valor em estoque',value:value.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}]}/><ContentCard title="Catálogo de produtos" description="Gerencie os itens vendidos no seu negócio.">{items.length?<div className="table-shell"><table><thead><tr><th>Produto</th><th>SKU</th><th>Preço</th><th>Estoque</th><th></th></tr></thead><tbody>{items.map(x=><tr key={x.id}><td><strong>{x.name}</strong></td><td>{x.sku||'—'}</td><td>R$ {Number(x.price).toFixed(2)}</td><td><Pill tone={Number(x.stock)<5?'warning':'success'}>{x.stock}</Pill></td><td className="row-actions"><button onClick={()=>remove(x.id)}>Excluir</button></td></tr>)}</tbody></table></div>:<div className="catalog-grid"><EmptyState title="Nenhum produto cadastrado" description="Adicione produtos e controle estoque, preço e disponibilidade." action={<Button onClick={()=>setOpen(true)}>Novo produto</Button>}/></div>}</ContentCard><Modal open={open} onClose={()=>setOpen(false)} onSubmit={create} title="Novo produto"><Field label="Nome" name="name" required/><Field label="SKU" name="sku"/><Field label="Preço de venda" name="price" type="number" required/><Field label="Estoque inicial" name="stock" type="number" required/></Modal></>}

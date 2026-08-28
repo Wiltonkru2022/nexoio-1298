@@ -1,5 +1,16 @@
-export const BUSINESS_TYPES = ['beauty','health','retail','restaurant','technical_assistance','automotive','fitness','education','professional_services','general'] as const;
-export const MODULES = ['customers','crm','products','services','inventory','sales','cash','appointments','professionals','commissions','service_orders','finance','restaurant','delivery','ecommerce','campaigns','public_site'] as const;
+export const BUSINESS_TYPES = ['salon','beauty','barbershop','restaurant','snackbar','retail','technical_assistance','service_provider','gym','studio','clinic','other'] as const;
+export type BusinessSegment = typeof BUSINESS_TYPES[number];
+export const MODULES = ['overview','customers','sales','cash','finance','team','settings','schedule','products','services','inventory','orders','tables','commands','menu','kitchen','delivery','service_orders','equipment','quotes','suppliers','classes','checkin','plans','patients','procedures','professionals'] as const;
+export type ModuleKey = typeof MODULES[number];
+export const CORE_MODULES: ModuleKey[] = ['overview','customers','sales','cash','finance','team','settings'];
+export const MODULE_DEPENDENCIES: Partial<Record<ModuleKey, ModuleKey[]>> = { kitchen:['orders'],tables:['orders'],commands:['orders'],delivery:['orders'],service_orders:['customers'],classes:['plans'] };
+export const SEGMENT_MODULES: Record<BusinessSegment, ModuleKey[]> = {
+  salon:['overview','customers','schedule','services','sales','products','cash','finance','team','settings'],beauty:['overview','customers','schedule','services','sales','products','cash','finance','team','settings'],barbershop:['overview','customers','schedule','services','sales','products','cash','finance','team','settings'],
+  restaurant:['overview','orders','tables','commands','menu','kitchen','delivery','cash','inventory','finance','team','settings'],snackbar:['overview','orders','commands','menu','kitchen','delivery','cash','inventory','finance','team','settings'],
+  retail:['overview','products','sales','inventory','customers','cash','finance','suppliers','team','settings'],technical_assistance:['overview','service_orders','customers','equipment','products','inventory','quotes','cash','finance','team','settings'],
+  service_provider:['overview','customers','services','quotes','service_orders','finance','settings'],gym:['overview','customers','plans','classes','schedule','checkin','finance','team','settings'],studio:['overview','customers','plans','classes','schedule','checkin','finance','team','settings'],
+  clinic:['overview','patients','schedule','procedures','professionals','finance','team','settings'],other:CORE_MODULES
+};
 export const RESERVED_SLUGS = new Set(['www','app','admin','api','mail','smtp','ftp','cdn','assets','static','support','status','billing','auth','login','dashboard']);
 
 export function slugifyBusiness(value: string): string {

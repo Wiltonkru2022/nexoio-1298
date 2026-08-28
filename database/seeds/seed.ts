@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import postgres from 'postgres';
 import { PERMISSIONS, ROLE_PERMISSIONS } from '@nexoio/permissions';
-import { MODULES, uuidv7 } from '@nexoio/core';
+import { CORE_MODULES, MODULE_DEPENDENCIES, MODULES, uuidv7 } from '@nexoio/core';
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error('DATABASE_URL is required');
@@ -17,7 +17,7 @@ await db.begin(async (sql) => {
   }
   const plans = [{code:'start',name:'Start',price:'0'},{code:'pro',name:'Pro',price:'99.90'},{code:'business',name:'Business',price:'199.90'}];
   for (const plan of plans) await sql`insert into plans (id, code, name, price_monthly) values (${uuidv7()}, ${plan.code}, ${plan.name}, ${plan.price}) on conflict (code) do update set name=excluded.name`;
-  for (const module of MODULES) await sql`insert into feature_flags (key, enabled, config_json) values (${'module.'+module}, false, '{}') on conflict (key) do nothing`;
+  for (const module of MODULES) await sql`insert into modules (key, name, description, core, dependencies_json) values (${module}, ${module.replaceAll('_',' ')}, ${`Módulo ${module} da plataforma Nexoio`}, ${CORE_MODULES.includes(module)}, ${sql.json(MODULE_DEPENDENCIES[module] ?? [])}) on conflict (key) do update set dependencies_json=excluded.dependencies_json`;
 });
 await db.end();
 console.log('Structural seed completed');

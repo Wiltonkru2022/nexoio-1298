@@ -1,0 +1,1 @@
+import{ActionLink}from'@nexoio/ui';import{AdminAuthLayout}from'../AuthLayout';export function AdminSessionExpiredPage(){return <AdminAuthLayout title="Sessão encerrada" description="A sessão administrativa expirou por segurança."><ActionLink href="/login">Entrar novamente</ActionLink></AdminAuthLayout>}

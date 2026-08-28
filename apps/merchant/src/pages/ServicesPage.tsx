@@ -1,14 +1,2 @@
-import { Button, EmptyState, Pill } from '@nexoio/ui';
-import { ContentCard } from '../components/ContentCard';
-import { PageHeader } from '../components/PageHeader';
-import { StatGrid } from '../components/StatGrid';
-
-export function ServicesPage() {
-  return <>
-    <PageHeader title="Serviços" description="Monte seu catálogo de serviços com duração, preço e profissionais responsáveis." action={<Button>Novo serviço</Button>} />
-    <StatGrid items={[{ label: 'Serviços ativos', value: '0' }, { label: 'Categorias', value: '0' }, { label: 'Mais vendido', value: '—' }, { label: 'Preço médio', value: 'R$ 0,00' }]} />
-    <ContentCard title="Catálogo de serviços" description="Serviços disponíveis para venda e agendamento." action={<Pill tone="brand">Catálogo</Pill>}>
-      <div className="catalog-grid"><EmptyState title="Nenhum serviço cadastrado" description="Cadastre serviços com preço, duração e equipe habilitada." action={<Button>Novo serviço</Button>} /></div>
-    </ContentCard>
-  </>;
-}
+import { useState } from 'react';import { Button, EmptyState, Pill } from '@nexoio/ui';import { ContentCard } from '../components/ContentCard';import { Field, Modal } from '../components/Modal';import { PageHeader } from '../components/PageHeader';import { StatGrid } from '../components/StatGrid';import { formValues,useCollection } from '../hooks/useCollection';
+export function ServicesPage(){const{items,add,remove}=useCollection('services');const[open,setOpen]=useState(false);const create=(e:React.FormEvent<HTMLFormElement>)=>{add(formValues(e));setOpen(false)};const average=items.length?items.reduce((s,x)=>s+Number(x.price),0)/items.length:0;return <><PageHeader title="Serviços" description="Monte seu catálogo com duração, preço e profissionais responsáveis." action={<Button onClick={()=>setOpen(true)}>Novo serviço</Button>}/><StatGrid items={[{label:'Serviços ativos',value:String(items.length)},{label:'Categorias',value:String(new Set(items.map(x=>x.category)).size)},{label:'Mais vendido',value:items[0]?.name||'—'},{label:'Preço médio',value:average.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}]}/><ContentCard title="Catálogo de serviços" description="Serviços disponíveis para venda e agendamento." action={<Pill tone="brand">Catálogo</Pill>}>{items.length?<div className="public-cards">{items.map(x=><article className="service-card" key={x.id}><Pill tone="success">Ativo</Pill><h3>{x.name}</h3><p>{x.category} · {x.duration} min</p><div className="service-price">R$ {Number(x.price).toFixed(2)}</div><div className="row-actions"><button onClick={()=>remove(x.id)}>Excluir</button></div></article>)}</div>:<div className="catalog-grid"><EmptyState title="Nenhum serviço cadastrado" description="Cadastre serviços com preço, duração e equipe habilitada." action={<Button onClick={()=>setOpen(true)}>Novo serviço</Button>}/></div>}</ContentCard><Modal open={open} onClose={()=>setOpen(false)} onSubmit={create} title="Novo serviço"><Field label="Nome" name="name" required/><Field label="Categoria" name="category" required/><Field label="Preço" name="price" type="number" required/><Field label="Duração (minutos)" name="duration" type="number" required/></Modal></>}

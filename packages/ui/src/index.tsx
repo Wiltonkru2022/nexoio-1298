@@ -1,13 +1,18 @@
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, PropsWithChildren, ReactNode } from 'react';
 import './styles.css';
 
 export function Brand() {
   return <a className="brand" href="/"><span>N</span><b>Nexoio</b></a>;
 }
 
-export function Button({ children, secondary = false, ghost = false }: PropsWithChildren<{ secondary?: boolean; ghost?: boolean }>) {
+export function Button({ children, secondary = false, ghost = false, className: suppliedClassName = '', ...props }: PropsWithChildren<{ secondary?: boolean; ghost?: boolean } & ButtonHTMLAttributes<HTMLButtonElement>>) {
   const className = ghost ? 'btn ghost' : secondary ? 'btn secondary' : 'btn';
-  return <button className={className}>{children}</button>;
+  return <button className={`${className} ${suppliedClassName}`.trim()} {...props}>{children}</button>;
+}
+
+export function ActionLink({ children, secondary = false, ghost = false, className: suppliedClassName = '', ...props }: PropsWithChildren<{ secondary?: boolean; ghost?: boolean } & AnchorHTMLAttributes<HTMLAnchorElement>>) {
+  const className = ghost ? 'btn ghost' : secondary ? 'btn secondary' : 'btn';
+  return <a className={`${className} ${suppliedClassName}`.trim()} {...props}>{children}</a>;
 }
 
 export function Pill({ children, tone = 'neutral' }: PropsWithChildren<{ tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'brand' }>) {

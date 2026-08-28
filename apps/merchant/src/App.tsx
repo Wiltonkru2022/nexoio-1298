@@ -1,47 +1,7 @@
-import { useEffect, useState } from 'react';
-import type { ComponentType } from 'react';
-import { MerchantShell } from './components/MerchantShell';
-import { OverviewPage } from './pages/OverviewPage';
-import { CustomersPage } from './pages/CustomersPage';
-import { SchedulePage } from './pages/SchedulePage';
-import { SalesPage } from './pages/SalesPage';
-import { ProductsPage } from './pages/ProductsPage';
-import { ServicesPage } from './pages/ServicesPage';
-import { CashPage } from './pages/CashPage';
-import { FinancePage } from './pages/FinancePage';
-import { TeamPage } from './pages/TeamPage';
-import { SettingsPage } from './pages/SettingsPage';
-import './merchant.css';
-
-const pages: Record<string, ComponentType> = {
-  '/': OverviewPage,
-  '/clientes': CustomersPage,
-  '/agenda': SchedulePage,
-  '/vendas': SalesPage,
-  '/produtos': ProductsPage,
-  '/servicos': ServicesPage,
-  '/caixa': CashPage,
-  '/financeiro': FinancePage,
-  '/equipe': TeamPage,
-  '/configuracoes': SettingsPage,
-};
-
-export function App() {
-  const [path, setPath] = useState(window.location.pathname);
-
-  useEffect(() => {
-    const onPop = () => setPath(window.location.pathname);
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []);
-
-  const navigate = (next: string) => {
-    if (next === path) return;
-    history.pushState({}, '', next);
-    setPath(next);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const Page = pages[path] ?? OverviewPage;
-  return <MerchantShell currentPath={pages[path] ? path : '/'} onNavigate={navigate}><Page /></MerchantShell>;
-}
+import{useEffect,useMemo,useState}from'react';import type{ComponentType}from'react';import{MerchantShell}from'./components/MerchantShell';import{OverviewPage}from'./pages/OverviewPage';import{CustomersPage}from'./pages/CustomersPage';import{SchedulePage}from'./pages/SchedulePage';import{SalesPage}from'./pages/SalesPage';import{ProductsPage}from'./pages/ProductsPage';import{ServicesPage}from'./pages/ServicesPage';import{CashPage}from'./pages/CashPage';import{FinancePage}from'./pages/FinancePage';import{TeamPage}from'./pages/TeamPage';import{SettingsPage}from'./pages/SettingsPage';import{ModulePage}from'./modules/ModulePage';import{NAV_ITEMS}from'./navigation';import{useSession}from'./auth/SessionProvider';import{LoginPage}from'./auth/pages/LoginPage';import{RegisterPage}from'./auth/pages/RegisterPage';import{ForgotPasswordPage}from'./auth/pages/ForgotPasswordPage';import{ResetPasswordPage}from'./auth/pages/ResetPasswordPage';import{VerifyEmailPage}from'./auth/pages/VerifyEmailPage';import{MfaPage}from'./auth/pages/MfaPage';import{RecoverMfaPage}from'./auth/pages/RecoverMfaPage';import{InvitePage}from'./auth/pages/InvitePage';import{AcceptInvitePage}from'./auth/pages/AcceptInvitePage';import{SelectBusinessPage}from'./auth/pages/SelectBusinessPage';import{SessionExpiredPage}from'./auth/pages/SessionExpiredPage';import{ForbiddenPage}from'./auth/pages/ForbiddenPage';import{OnboardingFlow}from'./onboarding/OnboardingFlow';import'./merchant.css';import'./modal.css';import'./auth/auth.css';
+const publicPages:Record<string,ComponentType>={'/login':LoginPage,'/cadastro':RegisterPage,'/esqueci-senha':ForgotPasswordPage,'/redefinir-senha':ResetPasswordPage,'/verificar-email':VerifyEmailPage,'/mfa':MfaPage,'/recuperar-mfa':RecoverMfaPage,'/convite':InvitePage,'/aceitar-convite':AcceptInvitePage,'/sessao-expirada':SessionExpiredPage,'/403':ForbiddenPage};
+const fixedPages:Record<string,ComponentType>={'/':OverviewPage,'/clientes':CustomersPage,'/agenda':SchedulePage,'/vendas':SalesPage,'/produtos':ProductsPage,'/servicos':ServicesPage,'/caixa':CashPage,'/financeiro':FinancePage,'/equipe':TeamPage,'/configuracoes':SettingsPage};
+const moduleMeta:Record<string,{key:string;title:string;description:string;statuses?:string[]}>={'/pedidos':{key:'orders',title:'Pedidos',description:'Pedidos de salão, retirada e delivery.',statuses:['Novo','Confirmado','Preparando','Pronto','Entregue','Cancelado']},'/mesas':{key:'tables',title:'Mesas',description:'Ocupação e atendimento por mesa.'},'/comandas':{key:'commands',title:'Comandas',description:'Consumo aberto e itens por cliente.'},'/cardapio':{key:'menu',title:'Cardápio',description:'Itens, preços e disponibilidade.'},'/cozinha':{key:'kitchen',title:'Cozinha',description:'Fila de preparo e tickets.'},'/delivery':{key:'delivery',title:'Delivery',description:'Entregas, retirada e acompanhamento.'},'/estoque':{key:'inventory',title:'Estoque',description:'Movimentos e saldo auditável.'},'/ordens-servico':{key:'service_orders',title:'Ordens de serviço',description:'Acompanhe cada equipamento do diagnóstico à entrega.',statuses:['Aberta','Em análise','Aguardando aprovação','Aprovada','Em reparo','Aguardando peça','Concluída','Entregue','Cancelada']},'/equipamentos':{key:'equipment',title:'Equipamentos',description:'Equipamentos vinculados aos clientes.'},'/orcamentos':{key:'quotes',title:'Orçamentos',description:'Propostas, aprovação e validade.'},'/fornecedores':{key:'suppliers',title:'Fornecedores',description:'Parceiros, compras e contatos.'},'/turmas':{key:'classes',title:'Turmas',description:'Horários, professores e alunos.'},'/checkin':{key:'checkin',title:'Check-in',description:'Controle de presença dos alunos.'},'/planos':{key:'plans',title:'Planos',description:'Planos e recorrência dos alunos.'},'/pacientes':{key:'patients',title:'Pacientes',description:'Dados privados com acesso restrito.'},'/procedimentos':{key:'procedures',title:'Procedimentos',description:'Catálogo clínico e regras de atendimento.'},'/profissionais':{key:'professionals',title:'Profissionais',description:'Equipe técnica e disponibilidade.'}};
+function Loading(){return <main className="auth-content"><div className="auth-card"><h2>Carregando ambiente…</h2><p>Validando sessão, empresa, permissões e módulos.</p></div></main>}
+function PrivateApp(){const session=useSession();const[path,setPath]=useState(location.pathname);useEffect(()=>{const onPop=()=>setPath(location.pathname);addEventListener('popstate',onPop);return()=>removeEventListener('popstate',onPop)},[]);useEffect(()=>{if(!session.loading&&session.user&&session.memberships.length===1&&!session.activeBusiness)void session.selectBusiness(session.memberships[0]!.businessId)},[session]);if(session.loading)return <Loading/>;if(!session.user){location.replace('/login');return <Loading/>}if(session.onboardingRequired)return <OnboardingFlow/>;if(!session.activeBusiness)return <SelectBusinessPage/>;const navItems=NAV_ITEMS.filter(item=>session.modules.has(item.module)&&(!item.permission||session.permissions.has(item.permission))).sort((a,b)=>a.order-b.order);const activeItem=navItems.find(x=>x.path===path);if(path!=='/'&&!activeItem)return <ForbiddenPage/>;const navigate=(next:string)=>{history.pushState({},'',next);setPath(next);scrollTo({top:0,behavior:'smooth'})};const meta=moduleMeta[path];const Page=fixedPages[path]??OverviewPage;return <MerchantShell currentPath={path} onNavigate={navigate} navItems={navItems} businessName={session.activeBusiness.businessName} onLogout={()=>void session.logout()}>{meta?<ModulePage moduleKey={meta.key} title={meta.title} description={meta.description} statuses={meta.statuses}/>:<Page/>}</MerchantShell>}
+export function App(){const path=location.pathname;const PublicPage=useMemo(()=>publicPages[path],[path]);return PublicPage?<PublicPage/>:<PrivateApp/>}

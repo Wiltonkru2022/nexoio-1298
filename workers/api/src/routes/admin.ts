@@ -1,0 +1,17 @@
+import { desc, eq, sql } from 'drizzle-orm';
+import { createMiddleware } from 'hono/factory';
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { auditLogs, businesses, plans, platformAdmins, subscriptions, users } from '@nexoio/db';
+import { error, requireSession } from '../middleware';
+import type { ApiEnv } from '../types';
+
+const requirePlatformAdmin=createMiddleware<ApiEnv>(async(c,next)=>{const row=(await c.get('db').select({status:platformAdmins.status,mfaRequired:platformAdmins.mfaRequired}).from(platformAdmins).innerJoin(users,eq(users.id,platformAdmins.userId)).where(eq(users.authUserId,c.get('sessionUser').id)).limit(1))[0];if(!row||row.status!=='active')return error(c,403,'FORBIDDEN','Acesso exclusivo do Master Admin');if(row.mfaRequired&&!c.get('sessionUser').twoFactorEnabled)return error(c,403,'MFA_REQUIRED','Ative e confirme o MFA para continuar');await next()});
+export const adminRoutes=new Hono<ApiEnv>();adminRoutes.use('*',requireSession,requirePlatformAdmin);
+adminRoutes.get('/dashboard',async c=>{const [count]=await c.get('db').select({total:sql<number>`count(*)`,active:sql<number>`count(*) filter (where status='active')`}).from(businesses);return c.json({data:{businesses:count,alerts:0}})});
+adminRoutes.get('/businesses',async c=>c.json({data:await c.get('db').select().from(businesses).orderBy(desc(businesses.createdAt)).limit(200)}));
+adminRoutes.post('/businesses',async c=>{const parsed=z.object({displayName:z.string().trim().min(2).max(120),publicSlug:z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),businessType:z.string().trim().min(2).max(50),email:z.email().optional()}).safeParse(await c.req.json().catch(()=>null));if(!parsed.success)return error(c,422,'VALIDATION_ERROR','Dados da empresa inválidos');const[row]=await c.get('db').insert(businesses).values({id:crypto.randomUUID(),...parsed.data,status:'active'}).returning();return c.json({data:row},201)});
+adminRoutes.patch('/businesses/:id/status',async c=>{const parsed=z.object({status:z.enum(['active','suspended','cancelled'])}).safeParse(await c.req.json().catch(()=>null));if(!parsed.success)return error(c,422,'VALIDATION_ERROR','Status inválido');const[row]=await c.get('db').update(businesses).set({status:parsed.data.status,updatedAt:new Date()}).where(eq(businesses.id,c.req.param('id'))).returning();return row?c.json({data:row}):error(c,404,'BUSINESS_NOT_FOUND','Empresa não encontrada')});
+adminRoutes.patch('/businesses/:id/plan',async c=>{const parsed=z.object({planId:z.uuid()}).safeParse(await c.req.json().catch(()=>null));if(!parsed.success)return error(c,422,'VALIDATION_ERROR','Plano inválido');const[row]=await c.get('db').update(subscriptions).set({planId:parsed.data.planId,updatedAt:new Date()}).where(eq(subscriptions.businessId,c.req.param('id'))).returning();return c.json({data:row??null})});
+adminRoutes.get('/audit',async c=>c.json({data:await c.get('db').select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(200)}));
+adminRoutes.get('/plans',async c=>c.json({data:await c.get('db').select().from(plans).orderBy(plans.priceMonthly)}));

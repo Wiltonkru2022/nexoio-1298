@@ -1,14 +1,2 @@
-import { Button, EmptyState, Pill } from '@nexoio/ui';
-import { ContentCard } from '../components/ContentCard';
-import { PageHeader } from '../components/PageHeader';
-import { StatGrid } from '../components/StatGrid';
-
-export function TeamPage() {
-  return <>
-    <PageHeader title="Equipe" description="Gerencie profissionais, permissões, agenda e vínculo com serviços." action={<Button>Adicionar pessoa</Button>} />
-    <StatGrid items={[{ label: 'Membros ativos', value: '0' }, { label: 'Profissionais', value: '0' }, { label: 'Administradores', value: '0' }, { label: 'Convites pendentes', value: '0' }]} />
-    <ContentCard title="Pessoas e acessos" description="Controle quem pode acessar cada área da empresa." action={<Pill tone="brand">RBAC ativo</Pill>}>
-      <div className="table-shell"><table><thead><tr><th>Nome</th><th>Função</th><th>Serviços</th><th>Status</th><th></th></tr></thead><tbody><tr><td colSpan={5}><EmptyState title="Sua equipe começa aqui" description="Adicione profissionais e defina acessos de forma segura." action={<Button>Adicionar pessoa</Button>} /></td></tr></tbody></table></div>
-    </ContentCard>
-  </>;
-}
+import { useState } from 'react';import { Button, EmptyState, Pill } from '@nexoio/ui';import { ContentCard } from '../components/ContentCard';import { Field, Modal } from '../components/Modal';import { PageHeader } from '../components/PageHeader';import { StatGrid } from '../components/StatGrid';import { formValues,useCollection } from '../hooks/useCollection';
+export function TeamPage(){const{items,add,remove}=useCollection('team');const[open,setOpen]=useState(false);const create=(e:React.FormEvent<HTMLFormElement>)=>{add(formValues(e));setOpen(false)};return <><PageHeader title="Equipe" description="Gerencie profissionais, permissões, agenda e serviços." action={<Button onClick={()=>setOpen(true)}>Adicionar pessoa</Button>}/><StatGrid items={[{label:'Membros ativos',value:String(items.length)},{label:'Profissionais',value:String(items.filter(x=>x.role==='Profissional').length)},{label:'Administradores',value:String(items.filter(x=>x.role==='Administrador').length)},{label:'Convites pendentes',value:'0'}]}/><ContentCard title="Pessoas e acessos" description="Controle quem pode acessar cada área.">{items.length?<div className="table-shell"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Função</th><th>Status</th><th></th></tr></thead><tbody>{items.map(x=><tr key={x.id}><td>{x.name}</td><td>{x.email}</td><td>{x.role}</td><td><Pill tone="success">Ativo</Pill></td><td className="row-actions"><button onClick={()=>remove(x.id)}>Remover</button></td></tr>)}</tbody></table></div>:<EmptyState title="Sua equipe começa aqui" description="Adicione profissionais e defina acessos de forma segura." action={<Button onClick={()=>setOpen(true)}>Adicionar pessoa</Button>}/>}</ContentCard><Modal open={open} onClose={()=>setOpen(false)} onSubmit={create} title="Adicionar pessoa" submitLabel="Enviar convite"><Field label="Nome" name="name" required/><Field label="E-mail" name="email" type="email" required/><Field label="Função" name="role"><select name="role"><option>Profissional</option><option>Operador</option><option>Administrador</option></select></Field><Field label="Telefone" name="phone" type="tel"/></Modal></>}

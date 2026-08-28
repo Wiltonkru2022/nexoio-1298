@@ -1,0 +1,1 @@
+import{ActionLink}from'@nexoio/ui';import{AdminAuthLayout}from'../AuthLayout';export function AdminForbiddenPage(){return <AdminAuthLayout title="Acesso negado" description="Sua conta não é um Master Admin ativo ou ainda não confirmou MFA."><ActionLink href="/login">Voltar ao login</ActionLink></AdminAuthLayout>}
