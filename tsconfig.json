@@ -5,6 +5,7 @@
     { "path": "packages/validation" },
     { "path": "packages/db" },
     { "path": "packages/permissions" },
+    { "path": "packages/i18n" },
     { "path": "workers/api" },
     { "path": "workers/public-site" },
     { "path": "apps/marketing" },
