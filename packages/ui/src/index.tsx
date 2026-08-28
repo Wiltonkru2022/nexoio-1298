@@ -4,6 +4,7 @@ import './styles.css';
 import './patterns.css';
 import './experience.css';
 export * from './experience';
+export * from './format';
 
 export function Brand() {
   return <a className="brand" href="/"><span>N</span><b>Nexoio</b></a>;
