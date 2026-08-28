@@ -425,7 +425,7 @@ platformRoutes.get('/business/public-site',requirePermission('public_site.read')
     c.get('db').select().from(businessPublicProfiles).where(eq(businessPublicProfiles.businessId,businessId)).limit(1),
     c.get('db').select().from(businessDomains).where(eq(businessDomains.businessId,businessId)),
   ]);
-  const publicHost=business[0]?(c.env.APP_URL.includes('staging')?`${business[0].slug}-staging.nexoio.com.br`:`${business[0].slug}.nexoio.com.br`):null;
+  const publicHost=business[0]?(c.env.APP_URL.includes('staging')?`site-${business[0].slug}.nexoio.com.br`:`${business[0].slug}.nexoio.com.br`):null;
   return c.json({data:{business:business[0],profile:profile[0]??null,domains,publicUrl:publicHost?`https://${publicHost}`:null}});
 });
 platformRoutes.patch('/business/public-site',requirePermission('public_site.update'),async c=>{
