@@ -14,6 +14,7 @@ import { adminRoutes } from './routes/admin';
 import { moduleRecordRoutes } from './routes/module-records';
 import { operationalRoutes } from './routes/operations';
 import { financeCashRoutes } from './routes/finance-cash';
+import { specializedResourceRoutes } from './routes/specialized-resources';
 import { productInfrastructureRoutes, publicAssetRoutes } from './routes/product-infrastructure';
 import type { ApiEnv } from './types';
 
@@ -26,7 +27,7 @@ app.use('*', async (c, next) => cors({
   },
   credentials: true,
   allowHeaders: ['Content-Type', 'X-Business-Id', 'Idempotency-Key'],
-  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 })(c, next));
 app.use('*', secureHeaders({ strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload', referrerPolicy: 'strict-origin-when-cross-origin', permissionsPolicy: { camera: [], microphone: [], geolocation: [] } }));
 app.get('/health', (c) => c.json({ status: 'ok' }));
@@ -46,9 +47,13 @@ app.use('/api/v1/products/*', requireModule('products'));
 app.use('/api/v1/services/*', requireModule('services'));
 app.use('/api/v1/appointments/*', requireModule('schedule'));
 app.use('/api/v1/orders/*', requireModule('orders'));
+app.use('/api/v1/tables/*', requireModule('tables'));
+app.use('/api/v1/commands/*', requireModule('commands'));
 app.use('/api/v1/kitchen/*', requireModule('kitchen'));
+app.use('/api/v1/delivery/*', requireModule('delivery'));
 app.use('/api/v1/inventory/*', requireModule('inventory'));
 app.use('/api/v1/service-orders/*', requireModule('service_orders'));
+app.use('/api/v1/equipment/*', requireModule('equipment'));
 app.use('/api/v1/patients/*', requireModule('patients'));
 app.use('/api/v1/enrollments/*', requireModule('memberships'));
 app.use('/api/v1/checkins/*', requireModule('checkin'));
@@ -57,6 +62,7 @@ app.route('/api/v1', catalogRoutes);
 app.route('/api/v1/appointments', appointmentRoutes);
 app.route('/api/v1', operationalRoutes);
 app.route('/api/v1', financeCashRoutes);
+app.route('/api/v1', specializedResourceRoutes);
 app.route('/api/v1', productInfrastructureRoutes);
 app.route('/api/v1/module-records', moduleRecordRoutes);
 app.notFound((c) => error(c, 404, 'NOT_FOUND', 'Rota não encontrada'));
