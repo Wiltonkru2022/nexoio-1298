@@ -8,16 +8,44 @@ import type { Bindings } from './types';
 type AuthSession = { user: { id: string; email: string; name: string; emailVerified: boolean; twoFactorEnabled?: boolean }; session: { id: string; expiresAt: Date } };
 export type AuthRuntime = { handler(request: Request): Promise<Response>; api: { getSession(input: { headers: Headers }): Promise<AuthSession | null> } };
 
+function parseSender(value: string) {
+  const match = value.match(/^\s*(.*?)\s*<([^<>]+)>\s*$/);
+  if (match) return { name: match[1] || 'Nexoio', email: match[2].trim() };
+  return { name: 'Nexoio', email: value.trim() };
+}
+
 async function deliverEmail(env: Bindings, to: string, subject: string, html: string) {
-  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) { console.log(JSON.stringify({ event: 'email.skipped', to, subject })); return; }
-  const response = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' }, body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, html }) });
-  if (!response.ok) throw new Error(`Email provider returned ${response.status}`);
+  if (!env.BREVO_API_KEY || !env.EMAIL_FROM) {
+    console.log(JSON.stringify({ event: 'email.skipped', to, subject }));
+    return;
+  }
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'api-key': env.BREVO_API_KEY,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      sender: parseSender(env.EMAIL_FROM),
+      to: [{ email: to }],
+      subject,
+      htmlContent: html
+    })
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    console.error(JSON.stringify({ event: 'email.failed', provider: 'brevo', status: response.status, detail: detail.slice(0, 500) }));
+    throw new Error(`Email provider returned ${response.status}`);
+  }
 }
 
 export function createAuth(env: Bindings, executionCtx?: { waitUntil(promise: Promise<unknown>): void }): AuthRuntime {
   const db = createDb(env.DATABASE_URL);
   const background = (promise: Promise<unknown>) => executionCtx ? executionCtx.waitUntil(promise) : void promise;
-  const sendLink = async (to: string, subject: string, url: string) => { background(deliverEmail(env, to, subject, `<p>${subject}</p><p><a href="${url}">Continuar com segurança</a></p><p>Se você não solicitou esta ação, ignore esta mensagem.</p>`)); };
+  const sendLink = async (to: string, subject: string, url: string) => { background(deliverEmail(env, to, subject, `<p>${subject}</p><p><a href=\"${url}\">Continuar com segurança</a></p><p>Se você não solicitou esta ação, ignore esta mensagem.</p>`)); };
   return betterAuth({
     appName: 'Nexoio', baseURL: env.AUTH_URL, secret: env.AUTH_SECRET,
     trustedOrigins: env.ALLOWED_ORIGINS.split(',').map((value) => value.trim()),
