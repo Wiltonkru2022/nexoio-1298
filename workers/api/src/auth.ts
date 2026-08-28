@@ -62,7 +62,8 @@ async function deliverEmail(env: Bindings, to: string, subject: string, html: st
   console.log(JSON.stringify({ event: 'email.sent', provider: 'brevo', to, subject, status: response.status, detail: detail.slice(0, 500) }));
 }
 
-export function createAuth(env: Bindings, _executionCtx?: { waitUntil(promise: Promise<unknown>): void }): AuthRuntime {
+export function createAuth(env: Bindings, executionCtx?: { waitUntil(promise: Promise<unknown>): void }): AuthRuntime {
+  void executionCtx;
   const db = createDb(env.DATABASE_URL);
   const sendLink = async (to: string, subject: string, url: string) => {
     await deliverEmail(env, to, subject, `<p>${subject}</p><p><a href="${url}">Continuar com segurança</a></p><p>Se você não solicitou esta ação, ignore esta mensagem.</p>`);
