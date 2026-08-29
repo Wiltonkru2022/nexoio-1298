@@ -64,7 +64,9 @@ jobs:
         run: |
           set -euo pipefail
           put_secret() {
-            local target="$1" source="$2" value="${!2:-}"
+            local target="$1"
+            local source="$2"
+            local value="${!source:-}"
             [ -z "$value" ] && return 0
             printf '%s' "$value" | npx wrangler secret put "$target" --env "$TARGET_ENV" --config workers/api/wrangler.jsonc >/dev/null
           }
@@ -162,7 +164,9 @@ jobs:
         run: |
           set -euo pipefail
           put_secret() {
-            local target="$1" source="$2" value="${!2:-}"
+            local target="$1"
+            local source="$2"
+            local value="${!source:-}"
             [ -z "$value" ] && return 0
             printf '%s' "$value" | npx wrangler secret put "$target" --env "$TARGET_ENV" --config workers/api/wrangler.jsonc >/dev/null
           }
