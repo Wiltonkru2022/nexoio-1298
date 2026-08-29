@@ -52,6 +52,20 @@ async function main(){
   try{
     const [identity]=await sql<{database:string}[]>`select current_database() as database`;
     assert(identity?.database===expectedDatabase,'Connected database identity differs from DATABASE_NAME_GUARD');
+
+    const [ledgerTable]=await sql<{exists:string|null}[]>`select to_regclass('public.financial_ledger')::text as exists`;
+    if(ledgerTable?.exists){
+      const [duplicates]=await sql<{count:number}[]>`
+        select count(*)::int as count from (
+          select business_id,source_type,source_id,entry_type
+          from financial_ledger
+          where source_id is not null
+          group by business_id,source_type,source_id,entry_type
+          having count(*)>1
+        ) duplicated_sources
+      `;
+      assert((duplicates?.count??0)===0,'Legacy financial_ledger has duplicate source links; resolve them before release');
+    }
   } finally { await sql.end({timeout:2}); }
 
   const zone=await cf(`/zones/${zoneId}`,saasToken);
