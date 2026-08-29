@@ -1,7 +1,7 @@
 ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS notes text;
 ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true;
 ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
-CREATE UNIQUE INDEX IF NOT EXISTS suppliers_business_name_uidx ON suppliers(business_id,name);
+CREATE INDEX IF NOT EXISTS suppliers_business_name_idx ON suppliers(business_id,name);
 
 ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS location_id uuid REFERENCES inventory_locations(id);
 ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS ordered_on date;
