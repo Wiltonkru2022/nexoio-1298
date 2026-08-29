@@ -1,4 +1,4 @@
 {
-  "$schema":"../../node_modules/wrangler/config-schema.json","name":"nexoio-public-site","main":"src/index.ts","compatibility_date":"2026-08-28","workers_dev":true,"observability":{"enabled":true},
+  "$schema":"../../node_modules/wrangler/config-schema.json","name":"nexoio-public-site","main":"src/main.ts","compatibility_date":"2026-08-28","workers_dev":true,"observability":{"enabled":true},
   "env":{"staging":{"name":"nexoio-public-site-staging","workers_dev":false,"routes":[{"pattern":"*-staging.nexoio.com.br/*","zone_name":"nexoio.com.br"}]},"production":{"name":"nexoio-public-site","workers_dev":false,"routes":[{"pattern":"*.nexoio.com.br/*","zone_name":"nexoio.com.br"}]}}
 }

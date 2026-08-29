@@ -6,12 +6,41 @@ import { auditLogs } from '@nexoio/db';
 import { uuidv7 } from '@nexoio/core';
 import { createAuth } from './auth';
 import { error, requestContext, requireAuth, requireModule } from './middleware';
+import { auditSensitiveMutation, cloudflareRateLimit, requireCriticalMfa } from './security';
+import { dispatchNotificationOutbox } from './notification-dispatch';
 import { customerRoutes } from './routes/customers';
 import { catalogRoutes } from './routes/catalog';
 import { appointmentRoutes } from './routes/appointments';
+import { teamRoutes } from './routes/team';
 import { platformRoutes } from './routes/platform';
 import { adminRoutes } from './routes/admin';
+import { adminMasterRoutes } from './routes/admin-master';
+import { adminOperationsRoutes } from './routes/admin-operations';
 import { moduleRecordRoutes } from './routes/module-records';
+import { transactionalOrderRoutes } from './routes/transactional-order';
+import { operationalRoutes } from './routes/operations';
+import { financeCashRoutes } from './routes/finance-cash';
+import { salesRoutes } from './routes/sales';
+import { specializedResourceRoutes } from './routes/specialized-resources';
+import { domainDetailRoutes } from './routes/domain-details';
+import { domainWorkflowRoutes } from './routes/domain-workflows';
+import { technicalServiceRoutes } from './routes/technical-service';
+import { accountingRoutes } from './routes/accounting';
+import { erpControlRoutes } from './routes/erp-controls';
+import { procurementRoutes } from './routes/procurement';
+import { restaurantAdvancedRoutes } from './routes/restaurant-advanced';
+import { restaurantMenuRoutes } from './routes/restaurant-menu';
+import { restaurantFlowRoutes } from './routes/restaurant-flow';
+import { restaurantCashRoutes } from './routes/restaurant-cash';
+import { restaurantProductionRoutes } from './routes/restaurant-production';
+import { restaurantPrintAgentAdminRoutes, restaurantPrintAgentRoutes } from './routes/restaurant-print-agent';
+import { sitePreviewRoutes } from './routes/site-preview';
+import { siteGrowthRoutes } from './routes/site-growth';
+import { domainMediaRoutes } from './routes/domain-media';
+import { billingRoutes } from './routes/billing';
+import { billingLifecycleRoutes } from './routes/billing-lifecycle';
+import { fixedBillingWebhookRoutes } from './routes/billing-webhook-fixed';
+import { productInfrastructureRoutes, publicAssetRoutes } from './routes/product-infrastructure';
 import type { ApiEnv } from './types';
 
 const app = new Hono<ApiEnv>();
@@ -22,29 +51,96 @@ app.use('*', async (c, next) => cors({
     return allowed.has(origin) ? origin : '';
   },
   credentials: true,
-  allowHeaders: ['Content-Type', 'X-Business-Id', 'Idempotency-Key'],
-  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
+  allowHeaders: ['Content-Type', 'X-Business-Id', 'Idempotency-Key', 'Authorization'],
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 })(c, next));
-app.use('*', secureHeaders({ strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload', referrerPolicy: 'strict-origin-when-cross-origin', permissionsPolicy: { camera: [], microphone: [], geolocation: [] } }));
+app.use('*', secureHeaders({
+  strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
+  referrerPolicy: 'no-referrer',
+  xFrameOptions: 'DENY',
+  xContentTypeOptions: 'nosniff',
+  permissionsPolicy: { camera: [], microphone: [], geolocation: [], payment: [], usb: [] },
+  contentSecurityPolicy: {
+    defaultSrc: ["'none'"],
+    frameAncestors: ["'none'"],
+    baseUri: ["'none'"],
+    formAction: ["'none'"]
+  }
+}));
 app.get('/health', (c) => c.json({ status: 'ok' }));
-app.get('/ready', async (c) => { try { await c.get('db').execute(sql`select 1`); return c.json({ status: 'ready' }); } catch { return error(c, 503, 'NOT_READY', 'Dependência indisponível'); } });
+app.get('/ready', async (c) => { try { await c.get('db').execute(sql`select 1`); return c.json({ status: 'ready' } as any); } catch { return error(c, 503, 'NOT_READY', 'Dependência indisponível'); } });
+app.route('/api/public/media', publicAssetRoutes);
+app.route('/api/webhooks/billing', fixedBillingWebhookRoutes);
+// Local print agents authenticate with their own revocable bearer token, not a human session.
+app.route('/api/print-agent', restaurantPrintAgentRoutes);
 app.all('/api/auth/*', async (c) => {
   const response=await createAuth(c.env,c.executionCtx).handler(c.req.raw); const route=c.req.path.replace('/api/auth/','');
   const events:Record<string,string>={'sign-in/email':response.ok?'auth.login.success':'auth.login.failed','sign-out':'auth.logout','change-password':'auth.password.changed','reset-password':'auth.password.reset','change-email':'auth.email.changed','revoke-other-sessions':'auth.session.revoked','two-factor/enable':'auth.mfa.enabled','two-factor/disable':'auth.mfa.disabled'};
   const action=events[route]; if(action)c.executionCtx.waitUntil(c.get('db').insert(auditLogs).values({id:uuidv7(),action,requestId:c.get('requestId'),userAgent:c.req.header('user-agent')?.slice(0,500),afterJson:{status:response.status}}).then(()=>undefined)); return response;
 });
 app.route('/api/v1/platform', platformRoutes);
+app.route('/api/v1/admin', adminMasterRoutes);
+app.route('/api/v1/admin', adminOperationsRoutes);
 app.route('/api/v1/admin', adminRoutes);
 app.use('/api/v1/*', requireAuth);
+app.use('/api/v1/*', cloudflareRateLimit);
+app.use('/api/v1/*', requireCriticalMfa);
+app.use('/api/v1/*', auditSensitiveMutation);
 app.get('/api/v1/me', (c) => c.json({ data: { userId: c.get('auth').userId, businessId: c.get('auth').businessId, permissions: [...c.get('auth').permissions] } }));
 app.use('/api/v1/customers/*', requireModule('customers'));
 app.use('/api/v1/products/*', requireModule('products'));
+app.use('/api/v1/menu/*', requireModule('menu'));
 app.use('/api/v1/services/*', requireModule('services'));
 app.use('/api/v1/appointments/*', requireModule('schedule'));
+app.use('/api/v1/sales/*', requireModule('sales'));
+app.use('/api/v1/orders/*', requireModule('orders'));
+app.use('/api/v1/tables/*', requireModule('tables'));
+app.use('/api/v1/commands/*', requireModule('commands'));
+app.use('/api/v1/kitchen/*', requireModule('kitchen'));
+app.use('/api/v1/delivery/*', requireModule('delivery'));
+app.use('/api/v1/restaurant/*', requireModule('orders'));
+app.use('/api/v1/inventory/*', requireModule('inventory'));
+app.use('/api/v1/purchase-orders/*', requireModule('inventory'));
+app.use('/api/v1/suppliers/*', requireModule('inventory'));
+app.use('/api/v1/service-orders/*', requireModule('service_orders'));
+app.use('/api/v1/technical/*', requireModule('service_orders'));
+app.use('/api/v1/equipment/*', requireModule('equipment'));
+app.use('/api/v1/patients/*', requireModule('patients'));
+app.use('/api/v1/enrollments/*', requireModule('memberships'));
+app.use('/api/v1/membership-installments/*', requireModule('memberships'));
+app.use('/api/v1/checkins/*', requireModule('checkin'));
 app.route('/api/v1/customers', customerRoutes);
 app.route('/api/v1', catalogRoutes);
 app.route('/api/v1/appointments', appointmentRoutes);
+app.route('/api/v1', teamRoutes);
+app.route('/api/v1', transactionalOrderRoutes);
+app.route('/api/v1', restaurantProductionRoutes);
+app.route('/api/v1', operationalRoutes);
+app.route('/api/v1', financeCashRoutes);
+app.route('/api/v1', salesRoutes);
+app.route('/api/v1', specializedResourceRoutes);
+app.route('/api/v1', domainDetailRoutes);
+app.route('/api/v1', domainWorkflowRoutes);
+app.route('/api/v1', technicalServiceRoutes);
+app.route('/api/v1', accountingRoutes);
+app.route('/api/v1', erpControlRoutes);
+app.route('/api/v1', procurementRoutes);
+app.route('/api/v1', restaurantAdvancedRoutes);
+app.route('/api/v1', restaurantMenuRoutes);
+app.route('/api/v1', restaurantFlowRoutes);
+app.route('/api/v1', restaurantCashRoutes);
+app.route('/api/v1', restaurantPrintAgentAdminRoutes);
+app.route('/api/v1', sitePreviewRoutes);
+app.route('/api/v1', siteGrowthRoutes);
+app.route('/api/v1', domainMediaRoutes);
+app.route('/api/v1', billingLifecycleRoutes);
+app.route('/api/v1', billingRoutes);
+app.route('/api/v1', productInfrastructureRoutes);
 app.route('/api/v1/module-records', moduleRecordRoutes);
 app.notFound((c) => error(c, 404, 'NOT_FOUND', 'Rota não encontrada'));
 app.onError((err, c) => { console.error(JSON.stringify({ request_id: c.get('requestId'), error: err.message })); return error(c, 500, 'INTERNAL_ERROR', 'Erro interno'); });
-export default app;
+
+export default {
+  fetch: (request:Request,env:ApiEnv['Bindings'],ctx:ExecutionContext)=>app.fetch(request,env,ctx),
+  scheduled: (_controller:ScheduledController,env:ApiEnv['Bindings'],ctx:ExecutionContext)=>{ctx.waitUntil(dispatchNotificationOutbox(env));}
+};
