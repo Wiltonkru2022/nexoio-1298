@@ -40,10 +40,11 @@ restaurantProductionRoutes.put('/restaurant/production/products/:productId/route
   const productId=id.safeParse(c.req.param('productId'));const body=z.object({stationIds:z.array(id).max(12)}).safeParse(await c.req.json().catch(()=>null));
   if(!productId.success||!body.success)return error(c,422,'VALIDATION_ERROR','Roteamento inválido');
   const b=c.get('auth').businessId,db=c.get('db');const product=rows(await db.execute(sql`select id from products where id=${productId.data}::uuid and business_id=${b}::uuid limit 1`))[0];if(!product)return error(c,404,'PRODUCT_NOT_FOUND','Produto não encontrado');
-  if(body.data.stationIds.length){const valid=rows(await db.execute(sql`select id from restaurant_production_stations where business_id=${b}::uuid and active=true and id in ${sql.raw(`(${body.data.stationIds.map(x=>`'${x}'::uuid`).join(',')})`)}`));if(valid.length!==new Set(body.data.stationIds).size)return error(c,422,'STATION_NOT_FOUND','Uma das estações é inválida ou está inativa');}
+  const stationIds=[...new Set(body.data.stationIds)];
+  for(const stationId of stationIds){const found=rows(await db.execute(sql`select id from restaurant_production_stations where id=${stationId}::uuid and business_id=${b}::uuid and active=true limit 1`))[0];if(!found)return error(c,422,'STATION_NOT_FOUND','Uma das estações é inválida ou está inativa');}
   await db.execute(sql`delete from restaurant_product_station_routes where business_id=${b}::uuid and product_id=${productId.data}::uuid`);
-  for(const stationId of new Set(body.data.stationIds))await db.execute(sql`insert into restaurant_product_station_routes(business_id,product_id,station_id) values(${b}::uuid,${productId.data}::uuid,${stationId}::uuid)`);
-  return c.json({data:{productId:productId.data,stationIds:[...new Set(body.data.stationIds)]}});
+  for(const stationId of stationIds)await db.execute(sql`insert into restaurant_product_station_routes(business_id,product_id,station_id) values(${b}::uuid,${productId.data}::uuid,${stationId}::uuid)`);
+  return c.json({data:{productId:productId.data,stationIds}});
 });
 
 restaurantProductionRoutes.post('/orders/:orderId/kitchen',requirePermission('orders.write'),async c=>{
@@ -73,4 +74,13 @@ restaurantProductionRoutes.get('/kitchen',requirePermission('orders.read'),async
     coalesce(jsonb_agg(jsonb_build_object('id',oi.id,'description',oi.description,'quantity',kti.quantity,'notes',oi.notes,'status',oi.status) order by oi.created_at) filter(where oi.id is not null),'[]'::jsonb) items
     from kitchen_tickets kt join orders o on o.id=kt.order_id and o.business_id=kt.business_id left join restaurant_tables rt on rt.id=o.table_id and rt.business_id=o.business_id left join restaurant_production_stations s on s.id=kt.station_id and s.business_id=kt.business_id left join kitchen_ticket_items kti on kti.kitchen_ticket_id=kt.id and kti.business_id=kt.business_id left join order_items oi on oi.id=kti.order_item_id and oi.business_id=kti.business_id where kt.business_id=${c.get('auth').businessId}::uuid and kt.status in ('queued','preparing','ready') group by kt.id,o.id,rt.number,s.name order by kt.priority desc,kt.queued_at asc`);
   return c.json({data:rows(result)});
+});
+
+restaurantProductionRoutes.patch('/kitchen/:ticketId',requirePermission('orders.write'),async c=>{
+  const ticketId=id.safeParse(c.req.param('ticketId'));const body=z.object({status:z.enum(['queued','preparing','ready','completed','cancelled'])}).safeParse(await c.req.json().catch(()=>null));
+  if(!ticketId.success||!body.success)return error(c,422,'VALIDATION_ERROR','Dados inválidos');
+  const b=c.get('auth').businessId,db=c.get('db');const result=await db.execute(sql`update kitchen_tickets set status=${body.data.status},started_at=case when ${body.data.status}='preparing' then coalesce(started_at,now()) else started_at end,ready_at=case when ${body.data.status}='ready' then coalesce(ready_at,now()) else ready_at end,completed_at=case when ${body.data.status}='completed' then coalesce(completed_at,now()) else completed_at end where id=${ticketId.data}::uuid and business_id=${b}::uuid returning id,order_id,status`);const ticket:any=rows(result)[0];if(!ticket)return error(c,404,'NOT_FOUND','Ticket não encontrado');
+  const statusRows=rows(await db.execute(sql`select status,count(*)::int count from kitchen_tickets where business_id=${b}::uuid and order_id=${ticket.order_id}::uuid and status<>'cancelled' group by status`)) as any[];const counts=new Map(statusRows.map(x=>[String(x.status),Number(x.count)]));const total=statusRows.reduce((s,x)=>s+Number(x.count),0);const finished=(counts.get('ready')??0)+(counts.get('completed')??0);const completed=counts.get('completed')??0;
+  const fulfillment=total>0&&completed===total?'completed':total>0&&finished===total?'ready':'preparing';await db.execute(sql`update orders set fulfillment_status=${fulfillment},updated_at=now() where id=${ticket.order_id}::uuid and business_id=${b}::uuid`);
+  return c.json({data:{...ticket,orderFulfillmentStatus:fulfillment}});
 });
