@@ -41,8 +41,8 @@ procurementRoutes.post('/purchase-orders',requirePermission('inventory.write'),a
   const found=rows(await c.get('db').execute(sql`select id from products where business_id=${businessId}::uuid and id=any(${productIds}::uuid[])`));
   if(found.length!==new Set(productIds).size)return error(c,404,'NOT_FOUND','Um ou mais produtos não pertencem à empresa');
   const orderId=uuidv7();const total=parsed.data.items.reduce((sum,item)=>sum+item.quantity*item.unitCost,0);
-  await c.get('db').execute(sql`insert into purchase_orders(id,business_id,supplier_id,location_id,status,expected_on,subtotal,total,notes,created_by) values(${orderId},${businessId}::uuid,${parsed.data.supplierId??null}::uuid,${parsed.data.locationId}::uuid,'ordered',${parsed.data.expectedOn??null}::date,${total},${total},${parsed.data.notes??null},${c.get('auth').userId}::uuid)`);
-  for(const item of parsed.data.items)await c.get('db').execute(sql`insert into purchase_order_items(id,business_id,purchase_order_id,product_id,variant_id,description,ordered_quantity,unit_cost,total) values(${uuidv7()},${businessId}::uuid,${orderId},${item.productId}::uuid,${item.variantId??null}::uuid,${item.description},${item.quantity},${item.unitCost},${item.quantity*item.unitCost})`);
+  await c.get('db').execute(sql`insert into purchase_orders(id,business_id,supplier_id,location_id,status,expected_on,subtotal,total,notes,created_by,ordered_at) values(${orderId},${businessId}::uuid,${parsed.data.supplierId??null}::uuid,${parsed.data.locationId}::uuid,'ordered',${parsed.data.expectedOn??null}::date,${total},${total},${parsed.data.notes??null},${c.get('auth').userId}::uuid,now())`);
+  for(const item of parsed.data.items)await c.get('db').execute(sql`insert into purchase_order_items(id,business_id,purchase_order_id,product_id,variant_id,description,quantity,ordered_quantity,unit_cost,total) values(${uuidv7()},${businessId}::uuid,${orderId},${item.productId}::uuid,${item.variantId??null}::uuid,${item.description},${item.quantity},${item.quantity},${item.unitCost},${item.quantity*item.unitCost})`);
   return c.json({data:{id:orderId,status:'ordered',total}},201);
 });
 
@@ -53,7 +53,7 @@ procurementRoutes.post('/purchase-orders/:orderId/receive',requirePermission('in
   try{
     const result=await c.get('db').execute(sql`select receive_purchase_order_transactional(${c.get('auth').businessId}::uuid,${orderId.data}::uuid,${c.get('auth').userId}::uuid,${JSON.stringify(parsed.data.items)}::jsonb,${parsed.data.notes??null}) receipt_id`);
     return c.json({data:{receiptId:rows(result)[0]?.receipt_id,orderId:orderId.data}},201);
-  }catch(err){const message=err instanceof Error?err.message:'';if(message.includes('PURCHASE_ORDER_NOT_FOUND'))return error(c,404,'NOT_FOUND','Pedido de compra não encontrado');if(message.includes('PURCHASE_ORDER_NOT_RECEIVABLE'))return error(c,409,'ORDER_NOT_RECEIVABLE','Pedido já recebido ou cancelado');if(message.includes('INVALID_RECEIPT_QUANTITY'))return error(c,409,'INVALID_RECEIPT_QUANTITY','Quantidade recebida supera o saldo do pedido');throw err;}
+  }catch(err){const message=err instanceof Error?err.message:'';if(message.includes('PURCHASE_ORDER_NOT_FOUND'))return error(c,404,'NOT_FOUND','Pedido de compra não encontrado');if(message.includes('PURCHASE_ORDER_NOT_RECEIVABLE'))return error(c,409,'ORDER_NOT_RECEIVABLE','Pedido já recebido ou cancelado');if(message.includes('INVALID_RECEIPT_QUANTITY'))return error(c,409,'INVALID_RECEIPT_QUANTITY','Quantidade recebida supera o saldo do pedido');if(message.includes('INVENTORY_LOCATION_REQUIRED'))return error(c,409,'INVENTORY_LOCATION_REQUIRED','Pedido legado precisa de um local de estoque antes do recebimento');throw err;}
 });
 
 procurementRoutes.get('/inventory/costs',requirePermission('inventory.read'),async c=>{
