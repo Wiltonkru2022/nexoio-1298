@@ -23,7 +23,13 @@ restaurantMenuRoutes.get('/menu/products',requirePermission('orders.read'),async
   const origin=new URL(c.req.url).origin;
   const r=await c.get('db').execute(sql`
     select p.id,p.name,p.sku,p.description,p.sale_price,p.minimum_stock,p.active,p.primary_image_file_id,
-      case when p.primary_image_file_id is not null then ${origin} || '/api/public/media/' || p.primary_image_file_id::text else null end image_url
+      case when p.primary_image_file_id is not null then ${origin} || '/api/public/media/' || p.primary_image_file_id::text else null end image_url,
+      coalesce((
+        select jsonb_agg(pc.name order by pc.sort_order,pc.name)
+        from product_category_links pcl
+        join product_categories pc on pc.id=pcl.category_id and pc.business_id=p.business_id
+        where pcl.business_id=p.business_id and pcl.product_id=p.id and pc.active=true
+      ),'[]'::jsonb) categories
     from products p
     where p.business_id=${c.get('auth').businessId}::uuid
     order by p.active desc,p.name asc
@@ -96,6 +102,5 @@ restaurantMenuRoutes.post('/menu/products/:id/image',requirePermission('orders.w
     await db.execute(sql`update products set primary_image_file_id=${fileId}::uuid,updated_at=now() where id=${productId.data}::uuid and business_id=${businessId}::uuid`);
   }catch(e){await c.env.R2_BUCKET.delete(key);throw e;}
   if(product.primary_image_file_id){const old:any=rows(await db.execute(sql`select object_key from files where id=${product.primary_image_file_id}::uuid and business_id=${businessId}::uuid limit 1`))[0];if(old?.object_key){await c.env.R2_BUCKET.delete(old.object_key);await db.execute(sql`update files set deleted_at=now() where id=${product.primary_image_file_id}::uuid and business_id=${businessId}::uuid`);}}
-  const origin=new URL(c.req.url).origin;
   return c.json({data:{id:fileId,imageUrl:`${origin}/api/public/media/${fileId}`}},201);
 });
