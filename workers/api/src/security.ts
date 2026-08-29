@@ -46,7 +46,7 @@ export const auditSensitiveMutation=createMiddleware<ApiEnv>(async(c,next)=>{
   c.executionCtx.waitUntil(c.get('db').insert(auditLogs).values({
     id:uuidv7(),
     businessId:auth.businessId,
-    userId:auth.userId,
+    actorUserId:auth.userId,
     action:'security.sensitive_mutation',
     entityType:'http_route',
     entityId:null,
