@@ -41,6 +41,10 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Validate Merchant Cloudflare bundle
+        run: npx wrangler deploy --dry-run --env staging --config apps/merchant/wrangler.jsonc --outdir .wrangler-dry-run/merchant
+      - name: Validate Admin Cloudflare bundle
+        run: npx wrangler deploy --dry-run --env staging --config apps/admin/wrangler.jsonc --outdir .wrangler-dry-run/admin
 
   e2e:
     needs: verify
