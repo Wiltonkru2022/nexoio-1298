@@ -59,14 +59,12 @@ async function mockAdmin(page: Page) {
       '/api/v1/admin/businesses': { data: [{ id: businessId, displayName: 'Empresa QA', publicSlug: 'empresa-qa', businessType: 'retail', status: 'active', createdAt: now }] },
       '/api/v1/admin/plans': { data: [{ id: '99999999-9999-4999-8999-999999999999', name: 'Pro', code: 'pro', priceMonthly: '149.90', active: true }] },
       '/api/v1/admin/audit': { data: [] },
-      '/api/v1/admin/subscriptions/operations': { data: [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', business_id: businessId, business_name: 'Empresa QA', plan_id: '99999999-9999-4999-8999-999999999999', plan_name: 'Pro', status: 'active', current_period_end: '2026-09-29T00:00:00.000Z', provider: 'asaas' }] },
-      '/api/v1/admin/usage/operations': { data: [{ business_id: businessId, business_name: 'Empresa QA', metric: 'storage_bytes', period: '2026-08-01', value: 1048576, storage_limit_bytes: 104857600 }] },
-      '/api/v1/admin/domains/operations': { data: [{ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', business_name: 'Empresa QA', hostname: 'www.empresaqa.com.br', verification_status: 'verified', ssl_status: 'active', provider: 'cloudflare', updated_at: now }] },
-      '/api/v1/admin/sites/operations': { data: [{ business_id: businessId, business_name: 'Empresa QA', slug: 'empresa-qa', published: true, headline: 'Empresa QA', updated_at: now }] },
-      '/api/v1/admin/users/operations': { data: [{ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', auth_user_id: 'auth-qa', name: 'Usuário QA', email: 'usuario@nexoio.local', status: 'active', email_verified: true, two_factor_enabled: true, memberships: 1, created_at: now }] },
-      '/api/v1/admin/modules/operations': { data: [{ key: 'inventory', name: 'Estoque', description: 'Controle de estoque', core: false, active: true, businesses_enabled: 1 }] },
-      [`/api/v1/admin/businesses/${businessId}/modules`]: { data: [{ key: 'inventory', name: 'Estoque', core: false, active: true, enabled: true, source: 'master', dependencies: [] }] },
-      '/api/v1/admin/plans/operations': { data: [{ id: '99999999-9999-4999-8999-999999999999', name: 'Pro', code: 'pro', price_monthly: '149.90', active: true, trial_days: 7, subscriptions: 12 }] },
+      '/api/v1/admin/operations/subscriptions': { data: [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', business_id: businessId, business_name: 'Empresa QA', plan_id: '99999999-9999-4999-8999-999999999999', plan_name: 'Pro', price_monthly: '149.90', status: 'active', current_period_end: '2026-09-29T00:00:00.000Z', provider: 'asaas', cancel_at_period_end: false }] },
+      '/api/v1/admin/operations/usage': { data: [{ business_id: businessId, business_name: 'Empresa QA', storage_used_bytes: 1048576, storage_limit_bytes: 104857600, usage: [{ metric: 'api_requests', period: '2026-08-01', value: 120 }] }] },
+      '/api/v1/admin/operations/domains': { data: [{ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', business_name: 'Empresa QA', hostname: 'www.empresaqa.com.br', verification_status: 'verified', ssl_status: 'active', dns_target: 'customers.nexoio.com.br', provider: 'cloudflare', updated_at: now }] },
+      '/api/v1/admin/operations/sites': { data: [{ business_id: businessId, business_name: 'Empresa QA', public_slug: 'empresa-qa', published: true, headline: 'Empresa QA', verified_domains: 1, updated_at: now }] },
+      '/api/v1/admin/operations/users': { data: [{ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', auth_user_id: 'auth-qa', name: 'Usuário QA', email: 'usuario@nexoio.local', status: 'active', email_verified: true, two_factor_enabled: true, memberships: [{ businessId, businessName: 'Empresa QA', role: 'owner' }], last_login_at: now, created_at: now }] },
+      '/api/v1/admin/operations/modules': { data: [{ key: 'inventory', name: 'Estoque', description: 'Controle de estoque', core: false, active: true, enabled: true, source: 'master', dependencies: [] }] },
     };
     if (request.method() === 'GET' && path in get) return json(route, get[path]);
     if (request.method() === 'GET') return json(route, { data: [] });
@@ -103,9 +101,9 @@ test.describe('Merchant - fluxos críticos e responsividade', () => {
   test('financeiro mostra contas, DRE e fechamento contábil', async ({ page }) => {
     await mockMerchant(page);
     await page.goto('http://127.0.0.1:5173/financeiro');
-    await expect(page.getByRole('heading', { name: 'Financeiro' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Financeiro', level: 1 })).toBeVisible();
     await expect(page.getByText('DRE', { exact: true })).toBeVisible();
-    await expect(page.getByText('Resultado')).toBeVisible();
+    await expect(page.getByText('Resultado', { exact: true })).toBeVisible();
     await expect(page.getByText('Fechamento contábil')).toBeVisible();
     await expect(page.getByText('Agosto QA')).toBeVisible();
     await expectNoPageOverflow(page);
@@ -123,7 +121,7 @@ test.describe('Merchant - fluxos críticos e responsividade', () => {
     await mockMerchant(page, { procurementError: true });
     await page.goto('http://127.0.0.1:5173/estoque');
     await expect(page.getByRole('alert')).toContainText('Falha simulada de compras');
-    await expect(page.getByRole('heading', { name: 'Estoque' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Estoque', level: 1 })).toBeVisible();
     await expectNoPageOverflow(page);
   });
 });
@@ -133,9 +131,9 @@ test.describe('Admin Master - operação real e responsividade', () => {
 
   test('assinaturas permitem operação de plano e status', async ({ page }) => {
     await page.goto('http://127.0.0.1:5174/assinaturas');
-    await expect(page.getByText('Assinaturas', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Assinaturas', level: 1 })).toBeVisible();
     await expect(page.getByText('Empresa QA')).toBeVisible();
-    await expect(page.getByRole('combobox').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Gerenciar' })).toBeVisible();
     await expectNoPageOverflow(page);
   });
 
@@ -151,13 +149,15 @@ test.describe('Admin Master - operação real e responsividade', () => {
     await page.goto('http://127.0.0.1:5174/usuarios');
     await expect(page.getByText('Usuário QA')).toBeVisible();
     await expect(page.getByText('usuario@nexoio.local')).toBeVisible();
+    await expect(page.getByText('MFA ✓')).toBeVisible();
     await expect(page.getByRole('button', { name: /Suspender/i })).toBeVisible();
     await expectNoPageOverflow(page);
   });
 
   test('módulos carregam catálogo e navegação móvel', async ({ page }) => {
     await page.goto('http://127.0.0.1:5174/modulos');
-    await expect(page.getByText('Estoque')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Módulos', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Estoque', level: 3 })).toBeVisible();
     await expect(page.getByText('Controle de estoque')).toBeVisible();
     await exerciseMobileMenu(page);
     await expectNoPageOverflow(page);
