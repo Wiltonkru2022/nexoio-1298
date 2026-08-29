@@ -30,6 +30,7 @@ import { restaurantAdvancedRoutes } from './routes/restaurant-advanced';
 import { restaurantMenuRoutes } from './routes/restaurant-menu';
 import { restaurantFlowRoutes } from './routes/restaurant-flow';
 import { restaurantCashRoutes } from './routes/restaurant-cash';
+import { restaurantProductionRoutes } from './routes/restaurant-production';
 import { sitePreviewRoutes } from './routes/site-preview';
 import { siteGrowthRoutes } from './routes/site-growth';
 import { domainMediaRoutes } from './routes/domain-media';
@@ -106,6 +107,8 @@ app.route('/api/v1/customers', customerRoutes);
 app.route('/api/v1', catalogRoutes);
 app.route('/api/v1/appointments', appointmentRoutes);
 app.route('/api/v1', transactionalOrderRoutes);
+// Station-aware kitchen/print routes must be registered before the legacy operational routes.
+app.route('/api/v1', restaurantProductionRoutes);
 app.route('/api/v1', operationalRoutes);
 app.route('/api/v1', financeCashRoutes);
 app.route('/api/v1', salesRoutes);
