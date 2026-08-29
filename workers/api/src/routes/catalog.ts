@@ -1,6 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { products, services } from '@nexoio/db';
+import { products, professionals, services } from '@nexoio/db';
 import { uuidv7 } from '@nexoio/core';
 import { createProductSchema, createServiceSchema } from '@nexoio/validation';
 import { error, requirePermission } from '../middleware';
@@ -37,3 +37,4 @@ catalogRoutes.post('/services', requirePermission('services.write'), async (c) =
   const parsed = createServiceSchema.safeParse(await c.req.json().catch(() => null)); if (!parsed.success) return error(c, 422, 'VALIDATION_ERROR', 'Dados inválidos', parsed.error.flatten());
   const [row] = await c.get('db').insert(services).values({ id: uuidv7(), businessId: c.get('auth').businessId, ...parsed.data, price: String(parsed.data.price) }).returning(); return c.json({ data: row }, 201);
 });
+catalogRoutes.get('/professionals', requirePermission('appointments.read'), async (c) => c.json({ data: await c.get('db').select().from(professionals).where(and(eq(professionals.businessId,c.get('auth').businessId),eq(professionals.active,true))).orderBy(professionals.displayName).limit(200) }));
