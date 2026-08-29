@@ -8,3 +8,4 @@ export function createDb(databaseUrl: string) {
   return drizzle(neon(databaseUrl), { schema });
 }
 export * from './schema';
+export * from './restaurant-schema';
