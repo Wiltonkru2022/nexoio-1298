@@ -1,21 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, EmptyState } from '@nexoio/ui';
+import { useSession } from '../auth/SessionProvider';
 import { PageHeader } from '../components/PageHeader';
 import { Field, Modal } from '../components/Modal';
 import { api, ApiError } from '../lib/api';
+import { RestaurantCommandsPage } from './RestaurantCommandsPage';
 import { RestaurantAttendanceSettings } from './RestaurantOperationSettings';
 import './restaurant-operations.css';
 
 type TableRow={id:string;number:string;seats:number|null;status:'available'|'occupied'|'reserved'|'unavailable';created_at?:string};
-type TableFilter='all'|TableRow['status'];type CommandMode='automatic'|'manual'|'table_only';
+type TableFilter='all'|TableRow['status'];type CommandMode='automatic'|'manual'|'table_only';type AttendanceView='tables'|'commands';
 type OpenResult={mode:CommandMode;tableId:string;tableNumber:string;tabId:string|null;commandCode:string|null;reused?:boolean};
 const labels:Record<TableRow['status'],string>={available:'Livre',occupied:'Ocupada',reserved:'Reservada',unavailable:'Indisponível'};
 const navigate=(path:string)=>{history.pushState({},'',path);window.dispatchEvent(new PopStateEvent('popstate'));};
 
 export function RestaurantTablesPage(){
+  const session=useSession();const commandsEnabled=session.modules.has('commands')&&session.permissions.has('orders.read');
+  const[view,setView]=useState<AttendanceView>(()=>location.pathname==='/comandas'?'commands':'tables');
   const[items,setItems]=useState<TableRow[]>([]);const[loading,setLoading]=useState(true);const[error,setError]=useState('');const[open,setOpen]=useState(false);const[saving,setSaving]=useState(false);const[filter,setFilter]=useState<TableFilter>('all');const[commandMode,setCommandMode]=useState<CommandMode>('automatic');const[manualTable,setManualTable]=useState<TableRow|null>(null);
   const load=useCallback(async()=>{setLoading(true);setError('');try{const[result,settings]=await Promise.all([api.get<{data:TableRow[]}>('/api/v1/tables'),api.get<{data:{command_mode?:CommandMode}}>('/api/v1/restaurant/settings')]);setItems(result.data);setCommandMode(settings.data.command_mode??'automatic')}catch(cause){setError(cause instanceof ApiError?cause.message:'Não foi possível carregar as mesas.')}finally{setLoading(false)}},[]);
   useEffect(()=>{void load()},[load]);
+  useEffect(()=>{setView(location.pathname==='/comandas'&&commandsEnabled?'commands':'tables')},[commandsEnabled]);
+  const switchView=(next:AttendanceView)=>{if(next==='commands'&&!commandsEnabled)return;setView(next);navigate(next==='commands'?'/comandas':'/mesas')};
   const counts=useMemo(()=>({all:items.length,available:items.filter(x=>x.status==='available').length,occupied:items.filter(x=>x.status==='occupied').length,reserved:items.filter(x=>x.status==='reserved').length,unavailable:items.filter(x=>x.status==='unavailable').length}),[items]);
   const visible=filter==='all'?items:items.filter(x=>x.status===filter);
   const create=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();setSaving(true);setError('');const form=new FormData(e.currentTarget);try{await api.post('/api/v1/tables',{number:String(form.get('number')??'').trim(),seats:Number(form.get('seats')??0)||undefined});setOpen(false);await load()}catch(cause){setError(cause instanceof ApiError?cause.message:'Não foi possível criar a mesa.')}finally{setSaving(false)}};
@@ -25,7 +31,9 @@ export function RestaurantTablesPage(){
   const start=(table:TableRow)=>{if(table.status==='unavailable')return;if(commandMode==='manual'&&table.status!=='occupied'){setManualTable(table);return}void openAttendance(table)};
   const submitManual=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();if(!manualTable)return;const f=new FormData(e.currentTarget);await openAttendance(manualTable,{commandCode:String(f.get('commandCode')??'').trim(),guestCount:Number(f.get('guestCount')??1)||1})};
   return <>
-    <PageHeader title="Atendimento" description="Mesas e comandas são duas formas de entrar na mesma conta de atendimento." action={<div className="row-actions"><Button secondary onClick={()=>navigate('/comandas')}>Ver comandas</Button><Button onClick={()=>setOpen(true)}>Nova mesa</Button></div>}/>
+    <PageHeader title="Atendimento" description="Mesas e comandas são duas formas de entrar na mesma conta de atendimento." action={view==='tables'?<Button onClick={()=>setOpen(true)}>Nova mesa</Button>:undefined}/>
+    <div className="restaurant-toolbar"><button className={view==='tables'?'active':''} onClick={()=>switchView('tables')}>Mesas</button>{commandsEnabled?<button className={view==='commands'?'active':''} onClick={()=>switchView('commands')}>Comandas</button>:null}</div>
+    {view==='commands'&&commandsEnabled?<RestaurantCommandsPage embedded/>:<>
     <div className="restaurant-flow-banner"><strong>{commandMode==='automatic'?'Comanda automática':commandMode==='manual'?'Comanda manual':'Somente mesa'}</strong><span>{commandMode==='automatic'?'A comanda é criada ao abrir a mesa.':commandMode==='manual'?'O número da comanda física é solicitado somente na abertura.':'O consumo fica vinculado diretamente ao número da mesa.'}</span></div>
     <RestaurantAttendanceSettings value={commandMode} onSaved={setCommandMode}/>
     <section className="restaurant-summary" aria-label="Resumo das mesas"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}><span>Total</span><strong>{counts.all}</strong></button><button className={filter==='available'?'active':''} onClick={()=>setFilter('available')}><span>Livres</span><strong>{counts.available}</strong></button><button className={filter==='occupied'?'active':''} onClick={()=>setFilter('occupied')}><span>Ocupadas</span><strong>{counts.occupied}</strong></button><button className={filter==='reserved'?'active':''} onClick={()=>setFilter('reserved')}><span>Reservadas</span><strong>{counts.reserved}</strong></button></section>
@@ -33,5 +41,6 @@ export function RestaurantTablesPage(){
     {loading?<div className="restaurant-loading">Carregando mesas…</div>:visible.length?<section className="restaurant-card-grid">{visible.map(table=><article key={table.id} className={`restaurant-op-card status-${table.status}`}><div className="restaurant-card-top"><span className="restaurant-status"><i/>{labels[table.status]}</span><span className="restaurant-seat-count">{table.seats??'—'} lugares</span></div><button type="button" className="restaurant-card-open" disabled={saving||table.status==='unavailable'} onClick={()=>start(table)}><span className="restaurant-table-number">Mesa {table.number}</span><span className="restaurant-card-copy">{table.status==='available'?'Toque para abrir atendimento.':table.status==='occupied'?'Toque para continuar o atendimento.':table.status==='reserved'?'Toque para iniciar a reserva.':'Fora da operação no momento.'}</span></button><label className="restaurant-inline-field">Status<select value={table.status} onChange={e=>void changeStatus(table,e.target.value as TableRow['status'])}><option value="available">Livre</option><option value="occupied">Ocupada</option><option value="reserved">Reservada</option><option value="unavailable">Indisponível</option></select></label><div className="restaurant-card-actions"><button disabled={saving||table.status==='unavailable'} onClick={()=>start(table)}>{table.status==='occupied'?'Continuar atendimento':'Abrir atendimento'}</button></div></article>)}</section>:<EmptyState title="Nenhuma mesa cadastrada" description="Cadastre as mesas do salão para iniciar os atendimentos." action={<Button onClick={()=>setOpen(true)}>Cadastrar mesa</Button>}/>} 
     <Modal open={open} onClose={()=>!saving&&setOpen(false)} onSubmit={create} title="Nova mesa" description="Cadastro rápido; o atendimento é aberto ao tocar na mesa."><Field label="Número ou nome" name="number" required/><Field label="Quantidade de lugares" name="seats"><input name="seats" type="number" min="1" max="100" required/></Field>{saving?<div className="auth-notice">Salvando mesa…</div>:null}</Modal>
     <Modal open={Boolean(manualTable)} onClose={()=>!saving&&setManualTable(null)} onSubmit={submitManual} title={`Abrir Mesa ${manualTable?.number??''}`} description="Informe apenas a comanda física; depois o atendimento abre em tela cheia."><Field label="Número/código da comanda" name="commandCode" required/><Field label="Pessoas" name="guestCount"><input name="guestCount" type="number" min="1" max="100" defaultValue="1"/></Field></Modal>
+    </>}
   </>;
 }
