@@ -115,35 +115,47 @@ FOR EACH ROW
 EXECUTE FUNCTION nexoio_reverse_service_order_part_cost();
 
 -- Backfill only periods that are not already closed. Closed books are never rewritten by migration.
+WITH grouped AS (
+  SELECT
+    a.business_id,
+    a.service_order_part_id,
+    so.number AS service_order_number,
+    sop.description,
+    so.status AS service_order_status,
+    sum(a.total_cost) AS amount,
+    min(a.created_at)::date AS competence_date
+  FROM service_order_part_cost_allocations a
+  JOIN service_order_parts sop
+    ON sop.id=a.service_order_part_id
+   AND sop.business_id=a.business_id
+  JOIN service_orders so
+    ON so.id=sop.service_order_id
+   AND so.business_id=sop.business_id
+  GROUP BY a.business_id,a.service_order_part_id,so.number,sop.description,so.status
+)
 INSERT INTO financial_ledger(
   id,business_id,entry_type,source_type,source_id,category_id,chart_account_id,
   description,amount,competence_date,cash_date,status,created_by
 )
 SELECT
   gen_random_uuid(),
-  a.business_id,
+  g.business_id,
   'expense',
   'service_order_part',
-  a.service_order_part_id,
+  g.service_order_part_id,
   fc.id,
   fc.chart_account_id,
-  'Custo de peça · OS #'||so.number::text||' · '||sop.description,
-  sum(a.total_cost),
-  min(a.created_at)::date,
+  'Custo de peça · OS #'||g.service_order_number::text||' · '||g.description,
+  g.amount,
+  g.competence_date,
   NULL,
-  CASE WHEN so.status='cancelled' THEN 'reversed' ELSE 'posted' END,
+  CASE WHEN g.service_order_status='cancelled' THEN 'reversed' ELSE 'posted' END,
   NULL
-FROM service_order_part_cost_allocations a
-JOIN service_order_parts sop
-  ON sop.id=a.service_order_part_id
- AND sop.business_id=a.business_id
-JOIN service_orders so
-  ON so.id=sop.service_order_id
- AND so.business_id=sop.business_id
+FROM grouped g
 LEFT JOIN LATERAL (
   SELECT c.id,c.chart_account_id
   FROM financial_categories c
-  WHERE c.business_id=a.business_id
+  WHERE c.business_id=g.business_id
     AND c.kind IN ('expense','both')
     AND c.active=true
   ORDER BY (c.chart_account_id IS NOT NULL) DESC,c.created_at
@@ -152,11 +164,10 @@ LEFT JOIN LATERAL (
 WHERE NOT EXISTS (
   SELECT 1
   FROM accounting_periods ap
-  WHERE ap.business_id=a.business_id
+  WHERE ap.business_id=g.business_id
     AND ap.status='closed'
-    AND min(a.created_at)::date BETWEEN ap.starts_on AND ap.ends_on
+    AND g.competence_date BETWEEN ap.starts_on AND ap.ends_on
 )
-GROUP BY a.business_id,a.service_order_part_id,fc.id,fc.chart_account_id,so.number,sop.description,so.status
 ON CONFLICT (business_id,source_type,source_id,entry_type) WHERE source_id IS NOT NULL
 DO UPDATE SET
   category_id=EXCLUDED.category_id,
