@@ -33,6 +33,6 @@ export function RestaurantTablesPage(){
       <label className="restaurant-inline-field">Status<select value={table.status} onChange={e=>void changeStatus(table,e.target.value as TableRow['status'])}><option value="available">Livre</option><option value="occupied">Ocupada</option><option value="reserved">Reservada</option><option value="unavailable">Indisponível</option></select></label>
       <div className="restaurant-card-actions"><button onClick={()=>{history.pushState({},'','/comandas');window.dispatchEvent(new PopStateEvent('popstate'))}}>{table.status==='available'?'Abrir comanda':'Ver comandas'}</button></div>
     </article>)}</section>:<EmptyState title="Nenhuma mesa cadastrada" description="Cadastre as mesas do salão para acompanhar ocupação e comandas." action={<Button onClick={()=>setOpen(true)}>Cadastrar mesa</Button>}/>} 
-    <Modal open={open} onClose={()=>!saving&&setOpen(false)} onSubmit={create} title="Nova mesa"><Field label="Número ou nome" name="number" required/><Field label="Quantidade de lugares" name="seats" type="number" min="1" max="100" required/>{saving?<div className="auth-notice">Salvando mesa…</div>:null}</Modal>
+    <Modal open={open} onClose={()=>!saving&&setOpen(false)} onSubmit={create} title="Nova mesa"><Field label="Número ou nome" name="number" required/><Field label="Quantidade de lugares" name="seats"><input name="seats" type="number" min="1" max="100" required/></Field>{saving?<div className="auth-notice">Salvando mesa…</div>:null}</Modal>
   </>;
 }
