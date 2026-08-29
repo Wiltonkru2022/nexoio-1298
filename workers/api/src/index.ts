@@ -31,6 +31,7 @@ import { restaurantMenuRoutes } from './routes/restaurant-menu';
 import { restaurantFlowRoutes } from './routes/restaurant-flow';
 import { restaurantCashRoutes } from './routes/restaurant-cash';
 import { restaurantProductionRoutes } from './routes/restaurant-production';
+import { restaurantPrintAgentAdminRoutes, restaurantPrintAgentRoutes } from './routes/restaurant-print-agent';
 import { sitePreviewRoutes } from './routes/site-preview';
 import { siteGrowthRoutes } from './routes/site-growth';
 import { domainMediaRoutes } from './routes/domain-media';
@@ -48,7 +49,7 @@ app.use('*', async (c, next) => cors({
     return allowed.has(origin) ? origin : '';
   },
   credentials: true,
-  allowHeaders: ['Content-Type', 'X-Business-Id', 'Idempotency-Key'],
+  allowHeaders: ['Content-Type', 'X-Business-Id', 'Idempotency-Key', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 })(c, next));
 app.use('*', secureHeaders({
@@ -68,6 +69,8 @@ app.get('/health', (c) => c.json({ status: 'ok' }));
 app.get('/ready', async (c) => { try { await c.get('db').execute(sql`select 1`); return c.json({ status: 'ready' } as any); } catch { return error(c, 503, 'NOT_READY', 'Dependência indisponível'); } });
 app.route('/api/public/media', publicAssetRoutes);
 app.route('/api/webhooks/billing', fixedBillingWebhookRoutes);
+// Local print agents authenticate with their own revocable bearer token, not a human session.
+app.route('/api/print-agent', restaurantPrintAgentRoutes);
 app.all('/api/auth/*', async (c) => {
   const response=await createAuth(c.env,c.executionCtx).handler(c.req.raw); const route=c.req.path.replace('/api/auth/','');
   const events:Record<string,string>={'sign-in/email':response.ok?'auth.login.success':'auth.login.failed','sign-out':'auth.logout','change-password':'auth.password.changed','reset-password':'auth.password.reset','change-email':'auth.email.changed','revoke-other-sessions':'auth.session.revoked','two-factor/enable':'auth.mfa.enabled','two-factor/disable':'auth.mfa.disabled'};
@@ -107,7 +110,6 @@ app.route('/api/v1/customers', customerRoutes);
 app.route('/api/v1', catalogRoutes);
 app.route('/api/v1/appointments', appointmentRoutes);
 app.route('/api/v1', transactionalOrderRoutes);
-// Station-aware kitchen/print routes must be registered before the legacy operational routes.
 app.route('/api/v1', restaurantProductionRoutes);
 app.route('/api/v1', operationalRoutes);
 app.route('/api/v1', financeCashRoutes);
@@ -122,6 +124,7 @@ app.route('/api/v1', restaurantAdvancedRoutes);
 app.route('/api/v1', restaurantMenuRoutes);
 app.route('/api/v1', restaurantFlowRoutes);
 app.route('/api/v1', restaurantCashRoutes);
+app.route('/api/v1', restaurantPrintAgentAdminRoutes);
 app.route('/api/v1', sitePreviewRoutes);
 app.route('/api/v1', siteGrowthRoutes);
 app.route('/api/v1', domainMediaRoutes);
