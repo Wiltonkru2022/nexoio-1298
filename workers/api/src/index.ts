@@ -18,6 +18,7 @@ import { financeCashRoutes } from './routes/finance-cash';
 import { salesRoutes } from './routes/sales';
 import { specializedResourceRoutes } from './routes/specialized-resources';
 import { domainDetailRoutes } from './routes/domain-details';
+import { billingRoutes, billingWebhookRoutes } from './routes/billing';
 import { productInfrastructureRoutes, publicAssetRoutes } from './routes/product-infrastructure';
 import type { ApiEnv } from './types';
 
@@ -36,6 +37,7 @@ app.use('*', secureHeaders({ strictTransportSecurity: 'max-age=31536000; include
 app.get('/health', (c) => c.json({ status: 'ok' }));
 app.get('/ready', async (c) => { try { await c.get('db').execute(sql`select 1`); return c.json({ status: 'ready' }); } catch { return error(c, 503, 'NOT_READY', 'Dependência indisponível'); } });
 app.route('/api/public/media', publicAssetRoutes);
+app.route('/api/webhooks/billing', billingWebhookRoutes);
 app.all('/api/auth/*', async (c) => {
   const response=await createAuth(c.env,c.executionCtx).handler(c.req.raw); const route=c.req.path.replace('/api/auth/','');
   const events:Record<string,string>={'sign-in/email':response.ok?'auth.login.success':'auth.login.failed','sign-out':'auth.logout','change-password':'auth.password.changed','reset-password':'auth.password.reset','change-email':'auth.email.changed','revoke-other-sessions':'auth.session.revoked','two-factor/enable':'auth.mfa.enabled','two-factor/disable':'auth.mfa.disabled'};
@@ -71,6 +73,7 @@ app.route('/api/v1', financeCashRoutes);
 app.route('/api/v1', salesRoutes);
 app.route('/api/v1', specializedResourceRoutes);
 app.route('/api/v1', domainDetailRoutes);
+app.route('/api/v1', billingRoutes);
 app.route('/api/v1', productInfrastructureRoutes);
 app.route('/api/v1/module-records', moduleRecordRoutes);
 app.notFound((c) => error(c, 404, 'NOT_FOUND', 'Rota não encontrada'));
