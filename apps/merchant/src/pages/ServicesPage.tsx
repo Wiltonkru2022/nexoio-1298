@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Button, EmptyState, Pill } from '@nexoio/ui';
 import { ContentCard } from '../components/ContentCard';
