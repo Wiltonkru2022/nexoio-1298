@@ -5,6 +5,7 @@ import { Field, Modal } from '../components/Modal';
 import { PageHeader } from '../components/PageHeader';
 import { api, ApiError } from '../lib/api';
 import './restaurant-operations.css';
+import './cash-reference.css';
 
 type Movement={id:string;movement_type:string;amount:string;description:string|null;created_at:string};
 type Session={id:string;opening_amount:string;opened_at:string;opened_by_name:string;movements:Movement[]};
