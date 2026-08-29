@@ -13,10 +13,11 @@ const elapsed=(d?:string)=>d?`${Math.max(0,Math.floor((Date.now()-new Date(d).ge
 const fail=(e:unknown,fallback:string)=>e instanceof ApiError?e.message:fallback;
 const go=(path:string)=>{history.pushState({},'',path);window.dispatchEvent(new PopStateEvent('popstate'))};
 const channelLabel=(o:Order)=>o.table_id?'Mesa':o.tab_id?'Comanda':o.channel==='pickup'?'Retirada':o.channel==='delivery'?'Delivery':'Balcão';
+const initialChannel=():ChannelFilter=>{const requested=new URLSearchParams(location.search).get('channel');if(requested&&['all','table','counter','pickup','delivery'].includes(requested))return requested as ChannelFilter;return location.pathname==='/retirada'?'pickup':'all'};
 
 export function RestaurantOrdersPage(){
- const[orders,setOrders]=useState<Order[]>([]);const[checks,setChecks]=useState<Check[]>([]);const[loading,setLoading]=useState(true);const[error,setError]=useState('');const[channel,setChannel]=useState<ChannelFilter>('all');const[stage,setStage]=useState<StageFilter>('active');const[busy,setBusy]=useState('');
- const load=useCallback(async(force=false)=>{setLoading(orders.length===0);setError('');try{const[o,c]=await Promise.all([api.get<{data:Order[]}>('/api/v1/orders',{force}),api.get<{data:Check[]}>('/api/v1/restaurant/checks',{force})]);setOrders(o.data);setChecks(c.data)}catch(e){setError(fail(e,'Não foi possível carregar os pedidos.'))}finally{setLoading(false)}},[orders.length]);
+ const[orders,setOrders]=useState<Order[]>([]);const[checks,setChecks]=useState<Check[]>([]);const[loading,setLoading]=useState(true);const[error,setError]=useState('');const[channel,setChannel]=useState<ChannelFilter>(initialChannel());const[stage,setStage]=useState<StageFilter>('active');const[busy,setBusy]=useState('');
+ const load=useCallback(async(force=false)=>{if(!force)setLoading(true);setError('');try{const[o,c]=await Promise.all([api.get<{data:Order[]}>('/api/v1/orders',{force}),api.get<{data:Check[]}>('/api/v1/restaurant/checks',{force})]);setOrders(o.data);setChecks(c.data)}catch(e){setError(fail(e,'Não foi possível carregar os pedidos.'))}finally{setLoading(false)}},[]);
  useEffect(()=>{void load()},[load]);
  const checkById=useMemo(()=>new Map(checks.map(x=>[x.id,x])),[checks]);
  const active=useMemo(()=>orders.filter(o=>!['closed','cancelled'].includes(o.status)),[orders]);
