@@ -1,4 +1,4 @@
-import { index, integer, numeric, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, numeric, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { businesses, customers, products, sales, users } from './schema';
 
 const money=(name:string)=>numeric(name,{precision:14,scale:2});
@@ -11,7 +11,7 @@ export const restaurantTables=pgTable('restaurant_tables',{
 },t=>[index('restaurant_tables_business_idx').on(t.businessId,t.code)]);
 
 export const restaurantTabs=pgTable('restaurant_tabs',{
- id:uuid().primaryKey(), businessId:uuid('business_id').notNull().references(()=>businesses.id,{onDelete:'cascade'}), code:text().notNull(), tableId:uuid('table_id').references(()=>restaurantTables.id), customerId:uuid('customer_id').references(()=>customers.id), channel:text().notNull().default('table'), status:text().notNull().default('active'), subtotal:money('subtotal').notNull().default('0'), discount:money('discount').notNull().default('0'), total:money('total').notNull().default('0'), saleId:uuid('sale_id').references(()=>sales.id), openedAt:timestamp('opened_at',{withTimezone:true}).notNull().defaultNow(), requestedClosureAt:timestamp('requested_closure_at',{withTimezone:true}), closedAt:timestamp('closed_at',{withTimezone:true}), createdBy:uuid('created_by').notNull().references(()=>users.id), createdAt:createdAt(), updatedAt:updatedAt()
+ id:uuid().primaryKey(), businessId:uuid('business_id').notNull().references(()=>businesses.id,{onDelete:'cascade'}), code:text().notNull(), tableId:uuid('table_id').references(()=>restaurantTables.id), customerId:uuid('customer_id').references(()=>customers.id), channel:text().notNull().default('table'), fulfillmentJson:jsonb('fulfillment_json').notNull().default({}), status:text().notNull().default('active'), subtotal:money('subtotal').notNull().default('0'), discount:money('discount').notNull().default('0'), total:money('total').notNull().default('0'), saleId:uuid('sale_id').references(()=>sales.id), openedAt:timestamp('opened_at',{withTimezone:true}).notNull().defaultNow(), requestedClosureAt:timestamp('requested_closure_at',{withTimezone:true}), closedAt:timestamp('closed_at',{withTimezone:true}), createdBy:uuid('created_by').notNull().references(()=>users.id), createdAt:createdAt(), updatedAt:updatedAt()
 },t=>[index('restaurant_tabs_business_status_idx').on(t.businessId,t.status),index('restaurant_tabs_table_idx').on(t.businessId,t.tableId)]);
 
 export const restaurantOrders=pgTable('restaurant_orders',{
