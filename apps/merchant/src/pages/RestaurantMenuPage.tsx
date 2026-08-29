@@ -3,6 +3,7 @@ import { Button, EmptyState } from '@nexoio/ui';
 import { PageHeader } from '../components/PageHeader';
 import { Field, Modal } from '../components/Modal';
 import { api, ApiError } from '../lib/api';
+import { RestaurantCatalogSettingsPanel } from './RestaurantCatalogSettingsPanel';
 import './restaurant-operations.css';
 import './restaurant-menu.css';
 
@@ -32,7 +33,7 @@ export function RestaurantMenuPage(){
   const deactivate=async(p:Product)=>{if(!confirm(`Remover "${p.name}" do cardápio? O histórico de vendas será preservado.`))return;setError('');try{await api.delete(`/api/v1/menu/products/${p.id}`);await load()}catch(e){setError(fail(e,'Não foi possível remover o item do cardápio.'))}};
   const reactivate=async(p:Product)=>{setError('');try{await api.patch(`/api/v1/menu/products/${p.id}`,{active:true});await load()}catch(e){setError(fail(e,'Não foi possível reativar o item.'))}};
   return <>
-    <PageHeader title="Cardápio" description="Itens, preços, fotos, estoque e destino de produção." action={<Button onClick={openCreate}>Novo item</Button>}/>
+    <PageHeader title="Cardápio" description="Itens, preços, fotos, estoque, produção e configuração comercial em um só lugar." action={<Button onClick={openCreate}>Novo item</Button>}/>
     <section className="menu-panel"><div className="menu-panel-head"><h2>Itens do Cardápio</h2><div className="restaurant-toolbar"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>Todos</button><button className={filter==='active'?'active':''} onClick={()=>setFilter('active')}>Ativos</button><button className={filter==='inactive'?'active':''} onClick={()=>setFilter('inactive')}>Inativos</button><button onClick={()=>void load()}>Atualizar</button></div></div>
       {error?<div className="auth-notice error" role="alert">{error}</div>:null}
       {loading?<div className="restaurant-loading">Carregando cardápio…</div>:visible.length?<div className="menu-card-grid">{visible.map((p,i)=>{const destinations=routeNames(p.id);return <article className={`menu-item-card ${p.active?'':'menu-item-inactive'}`} key={p.id}>
@@ -41,6 +42,7 @@ export function RestaurantMenuPage(){
         <div className="menu-price-row"><strong>{brl(p.sale_price)}</strong><span className={p.active?'menu-active':'menu-inactive'}>● {p.active?'Ativo':'Inativo'}</span></div>
         <div className="menu-card-actions"><button onClick={()=>openEdit(p)}>Editar</button>{p.active?<button className="danger" onClick={()=>void deactivate(p)}>Excluir do cardápio</button>:<button onClick={()=>void reactivate(p)}>Reativar</button>}</div>
       </article>})}</div>:<EmptyState title="Nenhum item no cardápio" description="Cadastre produtos com foto, preço e destino de produção." action={<Button onClick={openCreate}>Novo item</Button>}/>}</section>
+    <RestaurantCatalogSettingsPanel/>
     <Modal open={open} onClose={()=>!saving&&(setOpen(false),setEditing(null))} onSubmit={submit} title={editing?'Editar item':'Novo item'} description="Defina também para quais setores este item será enviado ao confirmar um pedido." submitLabel={saving?'Salvando…':'Salvar'}>
       <Field label="Nome" name="name"><input name="name" defaultValue={editing?.name??''} required/></Field>
       <Field label="SKU" name="sku"><input name="sku" defaultValue={editing?.sku??''}/></Field>
