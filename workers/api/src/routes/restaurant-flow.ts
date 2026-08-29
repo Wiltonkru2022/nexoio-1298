@@ -78,6 +78,37 @@ restaurantFlowRoutes.get('/restaurant/checks',requirePermission('orders.read'),a
   return c.json({data:rows(result)});
 });
 
+restaurantFlowRoutes.get('/restaurant/accounts',requirePermission('orders.read'),async c=>{
+  const b=c.get('auth').businessId;
+  const result=await c.get('db').execute(sql`
+    with command_accounts as (
+      select 'command'::text account_type,t.id account_id,t.code label,t.table_id,rt.number table_number,t.opened_at,
+        coalesce(sum(o.total) filter(where o.status not in ('cancelled')),0) total,
+        coalesce(sum(op.paid),0) paid,
+        greatest(coalesce(sum(o.total) filter(where o.status not in ('cancelled')),0)-coalesce(sum(op.paid),0),0) due
+      from order_tabs t
+      left join restaurant_tables rt on rt.id=t.table_id and rt.business_id=t.business_id
+      left join orders o on o.tab_id=t.id and o.business_id=t.business_id
+      left join lateral (select coalesce(sum(p.amount) filter(where p.status='paid'),0) paid from order_payments p where p.business_id=t.business_id and p.order_id=o.id) op on true
+      where t.business_id=${b}::uuid and t.status='open'
+      group by t.id,rt.number
+    ), table_accounts as (
+      select 'table'::text account_type,rt.id account_id,('Mesa '||rt.number)::text label,rt.id table_id,rt.number table_number,min(o.opened_at) opened_at,
+        coalesce(sum(o.total),0) total,coalesce(sum(op.paid),0) paid,
+        greatest(coalesce(sum(o.total),0)-coalesce(sum(op.paid),0),0) due
+      from restaurant_tables rt
+      join orders o on o.table_id=rt.id and o.business_id=rt.business_id and o.tab_id is null and o.status not in ('closed','cancelled')
+      left join lateral (select coalesce(sum(p.amount) filter(where p.status='paid'),0) paid from order_payments p where p.business_id=rt.business_id and p.order_id=o.id) op on true
+      where rt.business_id=${b}::uuid
+      group by rt.id,rt.number
+    )
+    select * from command_accounts where due>0
+    union all
+    select * from table_accounts where due>0
+    order by opened_at asc`);
+  return c.json({data:rows(result)});
+});
+
 restaurantFlowRoutes.post('/restaurant/commands/:tabId/pay',requirePermission('sales.create'),async c=>{
   const tabId=id.safeParse(c.req.param('tabId'));const body=z.object({method:z.string().trim().min(1).max(40),amount:z.coerce.number().positive()}).safeParse(await c.req.json().catch(()=>null));
   if(!tabId.success||!body.success)return error(c,422,'VALIDATION_ERROR','Pagamento inválido');
@@ -85,4 +116,13 @@ restaurantFlowRoutes.post('/restaurant/commands/:tabId/pay',requirePermission('s
     const result=await c.get('db').execute(sql`select * from pay_restaurant_tab_transactional(${c.get('auth').businessId}::uuid,${tabId.data}::uuid,${c.get('auth').userId}::uuid,${body.data.method},${body.data.amount})`);
     return c.json({data:rows(result)[0]});
   }catch(reason){const message=reason instanceof Error?reason.message:String(reason);if(message.includes('TAB_NOT_FOUND'))return error(c,404,'TAB_NOT_FOUND','Comanda não encontrada ou já fechada');if(message.includes('TAB_HAS_NO_BALANCE'))return error(c,409,'TAB_HAS_NO_BALANCE','A comanda não possui saldo em aberto');if(message.includes('AMOUNT_EXCEEDS_BALANCE'))return error(c,409,'AMOUNT_EXCEEDS_BALANCE','Pagamento maior que o saldo da comanda');if(message.includes('INVENTORY_LOCATION_REQUIRED'))return error(c,409,'INVENTORY_LOCATION_REQUIRED','Configure um local de estoque antes de fechar a conta');if(message.includes('INSUFFICIENT_STOCK'))return error(c,409,'INSUFFICIENT_STOCK','Estoque insuficiente para fechar a conta');throw reason;}
+});
+
+restaurantFlowRoutes.post('/restaurant/tables/:tableId/pay',requirePermission('sales.create'),async c=>{
+  const tableId=id.safeParse(c.req.param('tableId'));const body=z.object({method:z.string().trim().min(1).max(40),amount:z.coerce.number().positive()}).safeParse(await c.req.json().catch(()=>null));
+  if(!tableId.success||!body.success)return error(c,422,'VALIDATION_ERROR','Pagamento inválido');
+  try{
+    const result=await c.get('db').execute(sql`select * from pay_restaurant_table_transactional(${c.get('auth').businessId}::uuid,${tableId.data}::uuid,${c.get('auth').userId}::uuid,${body.data.method},${body.data.amount})`);
+    return c.json({data:rows(result)[0]});
+  }catch(reason){const message=reason instanceof Error?reason.message:String(reason);if(message.includes('TABLE_NOT_FOUND'))return error(c,404,'TABLE_NOT_FOUND','Mesa não encontrada');if(message.includes('TABLE_HAS_NO_BALANCE'))return error(c,409,'TABLE_HAS_NO_BALANCE','A mesa não possui saldo em aberto');if(message.includes('AMOUNT_EXCEEDS_BALANCE'))return error(c,409,'AMOUNT_EXCEEDS_BALANCE','Pagamento maior que o saldo da mesa');if(message.includes('INVENTORY_LOCATION_REQUIRED'))return error(c,409,'INVENTORY_LOCATION_REQUIRED','Configure um local de estoque antes de fechar a conta');if(message.includes('INSUFFICIENT_STOCK'))return error(c,409,'INSUFFICIENT_STOCK','Estoque insuficiente para fechar a conta');throw reason;}
 });
