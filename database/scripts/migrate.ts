@@ -8,11 +8,30 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error('DATABASE_URL is required');
 
+const targetEnv = process.env.TARGET_ENV?.trim().toLowerCase();
+if (targetEnv === 'staging' || targetEnv === 'production') {
+  const parsed = new URL(url);
+  const hostGuard = process.env.DATABASE_HOST_GUARD?.trim();
+  const nameGuard = process.env.DATABASE_NAME_GUARD?.trim();
+  if (!hostGuard) throw new Error('DATABASE_HOST_GUARD is required for release migrations');
+  if (!nameGuard) throw new Error('DATABASE_NAME_GUARD is required for release migrations');
+  if (!parsed.hostname.endsWith('.neon.tech')) throw new Error('Release DATABASE_URL must point to Neon');
+  if (parsed.hostname !== hostGuard) throw new Error('DATABASE_URL host does not match DATABASE_HOST_GUARD');
+  const databaseName = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+  if (databaseName !== nameGuard) throw new Error('DATABASE_URL database does not match DATABASE_NAME_GUARD');
+}
+
 const migrationsFolder = './database/migrations';
 const journalPath = join(migrationsFolder, 'meta', '_journal.json');
 const client = postgres(url, { max: 1 });
 
 try {
+  if (targetEnv === 'staging' || targetEnv === 'production') {
+    const [{ database }] = await client<{ database: string }[]>`select current_database() as database`;
+    if (database !== process.env.DATABASE_NAME_GUARD) throw new Error('Connected database identity does not match DATABASE_NAME_GUARD');
+    console.log(`Release database guard OK: ${targetEnv}; database=${database}`);
+  }
+
   await migrate(drizzle(client), { migrationsFolder });
 
   await client.unsafe(`
