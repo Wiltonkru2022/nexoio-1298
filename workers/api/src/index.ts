@@ -6,6 +6,7 @@ import { auditLogs } from '@nexoio/db';
 import { uuidv7 } from '@nexoio/core';
 import { createAuth } from './auth';
 import { error, requestContext, requireAuth, requireModule } from './middleware';
+import { auditSensitiveMutation, requireCriticalMfa } from './security';
 import { customerRoutes } from './routes/customers';
 import { catalogRoutes } from './routes/catalog';
 import { appointmentRoutes } from './routes/appointments';
@@ -42,7 +43,19 @@ app.use('*', async (c, next) => cors({
   allowHeaders: ['Content-Type', 'X-Business-Id', 'Idempotency-Key'],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 })(c, next));
-app.use('*', secureHeaders({ strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload', referrerPolicy: 'strict-origin-when-cross-origin', permissionsPolicy: { camera: [], microphone: [], geolocation: [] } }));
+app.use('*', secureHeaders({
+  strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
+  referrerPolicy: 'no-referrer',
+  xFrameOptions: 'DENY',
+  xContentTypeOptions: 'nosniff',
+  permissionsPolicy: { camera: [], microphone: [], geolocation: [], payment: [], usb: [] },
+  contentSecurityPolicy: {
+    defaultSrc: ["'none'"],
+    frameAncestors: ["'none'"],
+    baseUri: ["'none'"],
+    formAction: ["'none'"]
+  }
+}));
 app.get('/health', (c) => c.json({ status: 'ok' }));
 app.get('/ready', async (c) => { try { await c.get('db').execute(sql`select 1`); return c.json({ status: 'ready' } as any); } catch { return error(c, 503, 'NOT_READY', 'Dependência indisponível'); } });
 app.route('/api/public/media', publicAssetRoutes);
@@ -56,6 +69,8 @@ app.route('/api/v1/platform', platformRoutes);
 app.route('/api/v1/admin', adminMasterRoutes);
 app.route('/api/v1/admin', adminRoutes);
 app.use('/api/v1/*', requireAuth);
+app.use('/api/v1/*', requireCriticalMfa);
+app.use('/api/v1/*', auditSensitiveMutation);
 app.get('/api/v1/me', (c) => c.json({ data: { userId: c.get('auth').userId, businessId: c.get('auth').businessId, permissions: [...c.get('auth').permissions] } }));
 app.use('/api/v1/customers/*', requireModule('customers'));
 app.use('/api/v1/products/*', requireModule('products'));
