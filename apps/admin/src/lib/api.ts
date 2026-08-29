@@ -16,8 +16,16 @@ export async function adminRequest<T>(path: string, options: RequestInit = {}): 
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const failure = body as { error?: { code?: string; message?: string } };
-      throw new AdminApiError(response.status, failure.error?.code ?? 'REQUEST_FAILED', failure.error?.message ?? 'Falha na solicitação');
+      const failure = body as {
+        error?: { code?: string; message?: string };
+        code?: string;
+        message?: string;
+      };
+      throw new AdminApiError(
+        response.status,
+        failure.error?.code ?? failure.code ?? 'REQUEST_FAILED',
+        failure.error?.message ?? failure.message ?? 'Falha na solicitação'
+      );
     }
     return body as T;
   } finally { clearTimeout(timer); }
