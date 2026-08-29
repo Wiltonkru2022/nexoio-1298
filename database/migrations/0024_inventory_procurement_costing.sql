@@ -1,46 +1,27 @@
-CREATE TABLE IF NOT EXISTS suppliers (
-  id uuid PRIMARY KEY,
-  business_id uuid NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-  name text NOT NULL,
-  document_number text,
-  email text,
-  phone text,
-  notes text,
-  active boolean NOT NULL DEFAULT true,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (business_id, name)
-);
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS notes text;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+CREATE UNIQUE INDEX IF NOT EXISTS suppliers_business_name_uidx ON suppliers(business_id,name);
 
-CREATE TABLE IF NOT EXISTS purchase_orders (
-  id uuid PRIMARY KEY,
-  business_id uuid NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-  supplier_id uuid REFERENCES suppliers(id),
-  location_id uuid NOT NULL REFERENCES inventory_locations(id),
-  status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','ordered','partial','received','cancelled')),
-  ordered_on date NOT NULL DEFAULT current_date,
-  expected_on date,
-  subtotal numeric(14,2) NOT NULL DEFAULT 0,
-  total numeric(14,2) NOT NULL DEFAULT 0,
-  notes text,
-  created_by uuid REFERENCES users(id),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS location_id uuid REFERENCES inventory_locations(id);
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS ordered_on date;
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS expected_on date;
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS subtotal numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS notes text;
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES users(id);
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+UPDATE purchase_orders SET ordered_on=COALESCE(ordered_on,ordered_at::date,created_at::date,current_date),subtotal=COALESCE(NULLIF(subtotal,0),total,0) WHERE ordered_on IS NULL OR subtotal=0;
+ALTER TABLE purchase_orders ALTER COLUMN ordered_on SET DEFAULT current_date;
+ALTER TABLE purchase_orders ALTER COLUMN ordered_on SET NOT NULL;
 CREATE INDEX IF NOT EXISTS purchase_orders_business_status_idx ON purchase_orders(business_id,status,ordered_on DESC);
 
-CREATE TABLE IF NOT EXISTS purchase_order_items (
-  id uuid PRIMARY KEY,
-  business_id uuid NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-  purchase_order_id uuid NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
-  product_id uuid NOT NULL REFERENCES products(id),
-  variant_id uuid REFERENCES product_variants(id),
-  description text NOT NULL,
-  ordered_quantity numeric(14,3) NOT NULL CHECK (ordered_quantity > 0),
-  received_quantity numeric(14,3) NOT NULL DEFAULT 0 CHECK (received_quantity >= 0),
-  unit_cost numeric(14,4) NOT NULL CHECK (unit_cost >= 0),
-  total numeric(14,2) NOT NULL CHECK (total >= 0)
-);
+ALTER TABLE purchase_order_items ADD COLUMN IF NOT EXISTS variant_id uuid REFERENCES product_variants(id);
+ALTER TABLE purchase_order_items ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE purchase_order_items ADD COLUMN IF NOT EXISTS ordered_quantity numeric(14,3);
+ALTER TABLE purchase_order_items ADD COLUMN IF NOT EXISTS received_quantity numeric(14,3) NOT NULL DEFAULT 0;
+UPDATE purchase_order_items poi SET ordered_quantity=COALESCE(poi.ordered_quantity,poi.quantity),description=COALESCE(poi.description,p.name,'Produto') FROM products p WHERE p.id=poi.product_id AND (poi.ordered_quantity IS NULL OR poi.description IS NULL);
+ALTER TABLE purchase_order_items ALTER COLUMN ordered_quantity SET NOT NULL;
+ALTER TABLE purchase_order_items ALTER COLUMN description SET NOT NULL;
 CREATE INDEX IF NOT EXISTS purchase_order_items_order_idx ON purchase_order_items(business_id,purchase_order_id);
 
 CREATE TABLE IF NOT EXISTS goods_receipts (
@@ -126,6 +107,7 @@ BEGIN
    FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'PURCHASE_ORDER_NOT_FOUND'; END IF;
   IF v_order.status IN ('received','cancelled') THEN RAISE EXCEPTION 'PURCHASE_ORDER_NOT_RECEIVABLE'; END IF;
+  IF v_order.location_id IS NULL THEN RAISE EXCEPTION 'INVENTORY_LOCATION_REQUIRED'; END IF;
   IF jsonb_typeof(p_items) <> 'array' OR jsonb_array_length(p_items)=0 THEN RAISE EXCEPTION 'RECEIPT_ITEMS_REQUIRED'; END IF;
 
   INSERT INTO goods_receipts(id,business_id,purchase_order_id,location_id,received_by,notes)
@@ -183,7 +165,7 @@ BEGIN
 
   UPDATE purchase_orders po SET status=CASE
     WHEN NOT EXISTS (SELECT 1 FROM purchase_order_items i WHERE i.purchase_order_id=po.id AND i.received_quantity < i.ordered_quantity) THEN 'received'
-    ELSE 'partial' END, updated_at=now()
+    ELSE 'partial' END, received_at=CASE WHEN NOT EXISTS (SELECT 1 FROM purchase_order_items i WHERE i.purchase_order_id=po.id AND i.received_quantity < i.ordered_quantity) THEN now() ELSE received_at END,updated_at=now()
   WHERE po.id=p_purchase_order_id AND po.business_id=p_business_id;
 
   INSERT INTO audit_logs(id,business_id,actor_user_id,action,entity_type,entity_id,before_json,after_json,created_at)
