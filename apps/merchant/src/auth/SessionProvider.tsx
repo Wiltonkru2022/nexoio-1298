@@ -12,8 +12,11 @@ const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 
 export function SessionProvider({children}:PropsWithChildren){
   const[state,setState]=useState<State>({loading:true,refreshing:false,user:null,memberships:[],activeBusiness:null,permissions:new Set(),modules:new Set(),onboardingRequired:false,error:null});
-  const mounted=useRef(true);
-  useEffect(()=>()=>{mounted.current=false},[]);
+  const mounted=useRef(false);
+  useEffect(()=>{
+    mounted.current=true;
+    return()=>{mounted.current=false};
+  },[]);
 
   const refresh=useCallback(async()=>{
     setState(current=>({...current,loading:current.user===null,refreshing:current.user!==null,error:null}));
