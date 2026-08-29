@@ -14,6 +14,7 @@ import { adminRoutes } from './routes/admin';
 import { moduleRecordRoutes } from './routes/module-records';
 import { restaurantRoutes } from './routes/restaurant';
 import { restaurantOperationRoutes } from './routes/restaurant-operations';
+import { cashRoutes } from './routes/cash';
 import type { ApiEnv } from './types';
 
 const app = new Hono<ApiEnv>();
@@ -48,6 +49,7 @@ app.route('/api/v1', catalogRoutes);
 app.route('/api/v1/appointments', appointmentRoutes);
 app.route('/api/v1/restaurant', restaurantRoutes);
 app.route('/api/v1/restaurant', restaurantOperationRoutes);
+app.route('/api/v1/cash', cashRoutes);
 app.route('/api/v1/module-records', moduleRecordRoutes);
 app.notFound((c) => error(c, 404, 'NOT_FOUND', 'Rota não encontrada'));
 app.onError((err, c) => { console.error(JSON.stringify({ request_id: c.get('requestId'), error: err.message })); return error(c, 500, 'INTERNAL_ERROR', 'Erro interno'); });
