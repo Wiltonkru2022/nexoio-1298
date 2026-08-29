@@ -7,6 +7,7 @@ import { uuidv7 } from '@nexoio/core';
 import { createAuth } from './auth';
 import { error, requestContext, requireAuth, requireModule } from './middleware';
 import { auditSensitiveMutation, cloudflareRateLimit, requireCriticalMfa } from './security';
+import { dispatchNotificationOutbox } from './notification-dispatch';
 import { customerRoutes } from './routes/customers';
 import { catalogRoutes } from './routes/catalog';
 import { appointmentRoutes } from './routes/appointments';
@@ -115,4 +116,8 @@ app.route('/api/v1', productInfrastructureRoutes);
 app.route('/api/v1/module-records', moduleRecordRoutes);
 app.notFound((c) => error(c, 404, 'NOT_FOUND', 'Rota não encontrada'));
 app.onError((err, c) => { console.error(JSON.stringify({ request_id: c.get('requestId'), error: err.message })); return error(c, 500, 'INTERNAL_ERROR', 'Erro interno'); });
-export default app;
+
+export default {
+  fetch: (request:Request,env:ApiEnv['Bindings'],ctx:ExecutionContext)=>app.fetch(request,env,ctx),
+  scheduled: (_controller:ScheduledController,env:ApiEnv['Bindings'],ctx:ExecutionContext)=>{ctx.waitUntil(dispatchNotificationOutbox(env));}
+};
