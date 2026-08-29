@@ -11,6 +11,7 @@ import { catalogRoutes } from './routes/catalog';
 import { appointmentRoutes } from './routes/appointments';
 import { platformRoutes } from './routes/platform';
 import { adminRoutes } from './routes/admin';
+import { adminMasterRoutes } from './routes/admin-master';
 import { moduleRecordRoutes } from './routes/module-records';
 import { transactionalOrderRoutes } from './routes/transactional-order';
 import { operationalRoutes } from './routes/operations';
@@ -43,7 +44,7 @@ app.use('*', async (c, next) => cors({
 })(c, next));
 app.use('*', secureHeaders({ strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload', referrerPolicy: 'strict-origin-when-cross-origin', permissionsPolicy: { camera: [], microphone: [], geolocation: [] } }));
 app.get('/health', (c) => c.json({ status: 'ok' }));
-app.get('/ready', async (c) => { try { await c.get('db').execute(sql`select 1`); return c.json({ status: 'ready' }); } catch { return error(c, 503, 'NOT_READY', 'Dependência indisponível'); } });
+app.get('/ready', async (c) => { try { await c.get('db').execute(sql`select 1`); return c.json({ status: 'ready' } as any); } catch { return error(c, 503, 'NOT_READY', 'Dependência indisponível'); } });
 app.route('/api/public/media', publicAssetRoutes);
 app.route('/api/webhooks/billing', fixedBillingWebhookRoutes);
 app.all('/api/auth/*', async (c) => {
@@ -52,6 +53,7 @@ app.all('/api/auth/*', async (c) => {
   const action=events[route]; if(action)c.executionCtx.waitUntil(c.get('db').insert(auditLogs).values({id:uuidv7(),action,requestId:c.get('requestId'),userAgent:c.req.header('user-agent')?.slice(0,500),afterJson:{status:response.status}}).then(()=>undefined)); return response;
 });
 app.route('/api/v1/platform', platformRoutes);
+app.route('/api/v1/admin', adminMasterRoutes);
 app.route('/api/v1/admin', adminRoutes);
 app.use('/api/v1/*', requireAuth);
 app.get('/api/v1/me', (c) => c.json({ data: { userId: c.get('auth').userId, businessId: c.get('auth').businessId, permissions: [...c.get('auth').permissions] } }));
