@@ -11,6 +11,8 @@ export interface Bindings {
   BREVO_API_KEY?: string;
   EMAIL_FROM?: string;
   R2_BUCKET: R2Bucket;
+  API_RATE_LIMITER: RateLimit;
+  SENSITIVE_RATE_LIMITER: RateLimit;
   AI?: Ai;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_ZONE_ID?: string;
