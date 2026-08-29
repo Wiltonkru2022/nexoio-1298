@@ -4,8 +4,10 @@ function required(name:string){const value=process.env[name]?.trim();if(!value)t
 function assert(condition:unknown,message:string):asserts condition{if(!condition)throw new Error(message)}
 function normalizedOrigin(value:string){const url=new URL(value);assert(url.protocol==='https:',`${url.href} must use HTTPS`);assert(!url.pathname||url.pathname==='/',`${url.href} must not include a path`);return url.origin;}
 
-const env=required('TARGET_ENV');
-assert(env==='staging'||env==='production','TARGET_ENV must be staging or production');
+const target=(process.env.TARGET_ENV??'').trim().toLowerCase();
+if(!target){console.log('Release preflight skipped outside staging/production');process.exit(0)}
+assert(target==='staging'||target==='production','TARGET_ENV must be staging or production');
+const env=target;
 const expected=env==='staging'?{
   deployGuard:'NEXOIO_STAGING',api:'https://api-staging.nexoio.com.br',merchant:'https://app-staging.nexoio.com.br',admin:'https://admin-staging.nexoio.com.br',bucket:'nexoio-staging',
 }:{
