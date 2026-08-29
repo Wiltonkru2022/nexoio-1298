@@ -14,15 +14,29 @@ jobs:
       ${{ github.event.workflow_run.conclusion == 'success' &&
           startsWith(github.event.workflow_run.head_branch, 'release/') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     environment: staging
     concurrency:
       group: deploy-staging
       cancel-in-progress: false
     env:
+      TARGET_ENV: staging
+      DEPLOY_GUARD: ${{ secrets.DEPLOY_GUARD }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+      TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
+      BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      SAAS_CLOUDFLARE_API_TOKEN: ${{ secrets.SAAS_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+      SAAS_CNAME_TARGET: ${{ secrets.SAAS_CNAME_TARGET }}
+      BILLING_PROVIDER: ${{ secrets.BILLING_PROVIDER }}
+      BILLING_API_URL: ${{ secrets.BILLING_API_URL }}
+      BILLING_API_KEY: ${{ secrets.BILLING_API_KEY }}
+      BILLING_WEBHOOK_SECRET: ${{ secrets.BILLING_WEBHOOK_SECRET }}
+      PUBLIC_SITE_SMOKE_URL: ${{ vars.PUBLIC_SITE_SMOKE_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,19 +44,67 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - name: Apply additive database migrations
+      - name: Validate staging release configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "$DEPLOY_GUARD" = "NEXOIO_STAGING" ] || { echo "::error::Invalid staging DEPLOY_GUARD"; exit 1; }
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID DATABASE_URL AUTH_SECRET SAAS_CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID SAAS_CNAME_TARGET PUBLIC_SITE_SMOKE_URL; do
+            [ -n "${!name:-}" ] || { echo "::error::$name is required"; exit 1; }
+          done
+          if [ "${BILLING_PROVIDER,,}" = "asaas" ]; then
+            for name in BILLING_API_URL BILLING_API_KEY BILLING_WEBHOOK_SECRET; do
+              [ -n "${!name:-}" ] || { echo "::error::$name is required when BILLING_PROVIDER=asaas"; exit 1; }
+            done
+          fi
+      - name: Apply tracked database migrations
         run: npm run db:migrate
+      - name: Sync API Worker secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          put_secret() {
+            local target="$1" source="$2" value="${!2:-}"
+            [ -z "$value" ] && return 0
+            printf '%s' "$value" | npx wrangler secret put "$target" --env "$TARGET_ENV" --config workers/api/wrangler.jsonc >/dev/null
+          }
+          put_secret DATABASE_URL DATABASE_URL
+          put_secret AUTH_SECRET AUTH_SECRET
+          put_secret TURNSTILE_SECRET TURNSTILE_SECRET
+          put_secret BREVO_API_KEY BREVO_API_KEY
+          put_secret EMAIL_FROM EMAIL_FROM
+          put_secret CLOUDFLARE_API_TOKEN SAAS_CLOUDFLARE_API_TOKEN
+          put_secret CLOUDFLARE_ZONE_ID CLOUDFLARE_ZONE_ID
+          put_secret SAAS_CNAME_TARGET SAAS_CNAME_TARGET
+          put_secret BILLING_PROVIDER BILLING_PROVIDER
+          put_secret BILLING_API_URL BILLING_API_URL
+          put_secret BILLING_API_KEY BILLING_API_KEY
+          put_secret BILLING_WEBHOOK_SECRET BILLING_WEBHOOK_SECRET
+      - name: Sync public-site Worker database secret
+        shell: bash
+        run: printf '%s' "$DATABASE_URL" | npx wrangler secret put DATABASE_URL --env "$TARGET_ENV" --config workers/public-site/wrangler.jsonc >/dev/null
       - name: Deploy API to staging
         run: npx wrangler deploy --env staging --config workers/api/wrangler.jsonc
+      - name: Deploy public site to staging
+        run: npx wrangler deploy --env staging --config workers/public-site/wrangler.jsonc
       - name: Smoke test staging API
-        id: smoke
+        id: api_smoke
         continue-on-error: true
-        run: curl --fail --show-error --silent --retry 4 --retry-delay 3 https://api-staging.nexoio.com.br/health | grep -q '"status":"ok"'
-      - name: Rollback staging on failed smoke test
-        if: steps.smoke.outcome == 'failure'
-        run: npx wrangler rollback --env staging --config workers/api/wrangler.jsonc --message "Automatic rollback after failed staging smoke test"
-      - name: Fail after rollback
-        if: steps.smoke.outcome == 'failure'
+        run: |
+          curl --fail --show-error --silent --retry 5 --retry-delay 3 https://api-staging.nexoio.com.br/ready | grep -q '"status":"ready"'
+      - name: Smoke test staging public-site Worker
+        id: site_smoke
+        continue-on-error: true
+        run: |
+          curl --fail --show-error --silent --retry 5 --retry-delay 3 "${PUBLIC_SITE_SMOKE_URL%/}/__health" | grep -q '"status":"ok"'
+      - name: Rollback staging API on failed API smoke test
+        if: steps.api_smoke.outcome == 'failure'
+        run: npx wrangler rollback --env staging --config workers/api/wrangler.jsonc --message "Automatic rollback after failed staging API smoke test"
+      - name: Rollback staging public site on failed site smoke test
+        if: steps.site_smoke.outcome == 'failure'
+        run: npx wrangler rollback --env staging --config workers/public-site/wrangler.jsonc --message "Automatic rollback after failed staging public-site smoke test"
+      - name: Fail staging after rollback
+        if: steps.api_smoke.outcome == 'failure' || steps.site_smoke.outcome == 'failure'
         run: exit 1
 
   deploy-production:
@@ -50,15 +112,29 @@ jobs:
       ${{ github.event.workflow_run.conclusion == 'success' &&
           github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     environment: production
     concurrency:
       group: deploy-production
       cancel-in-progress: false
     env:
+      TARGET_ENV: production
+      DEPLOY_GUARD: ${{ secrets.DEPLOY_GUARD }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+      TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
+      BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      SAAS_CLOUDFLARE_API_TOKEN: ${{ secrets.SAAS_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+      SAAS_CNAME_TARGET: ${{ secrets.SAAS_CNAME_TARGET }}
+      BILLING_PROVIDER: ${{ secrets.BILLING_PROVIDER }}
+      BILLING_API_URL: ${{ secrets.BILLING_API_URL }}
+      BILLING_API_KEY: ${{ secrets.BILLING_API_KEY }}
+      BILLING_WEBHOOK_SECRET: ${{ secrets.BILLING_WEBHOOK_SECRET }}
+      PUBLIC_SITE_SMOKE_URL: ${{ vars.PUBLIC_SITE_SMOKE_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,17 +142,65 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - name: Apply additive database migrations
+      - name: Validate production release configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "$DEPLOY_GUARD" = "NEXOIO_PRODUCTION" ] || { echo "::error::Invalid production DEPLOY_GUARD"; exit 1; }
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID DATABASE_URL AUTH_SECRET SAAS_CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID SAAS_CNAME_TARGET PUBLIC_SITE_SMOKE_URL; do
+            [ -n "${!name:-}" ] || { echo "::error::$name is required"; exit 1; }
+          done
+          if [ "${BILLING_PROVIDER,,}" = "asaas" ]; then
+            for name in BILLING_API_URL BILLING_API_KEY BILLING_WEBHOOK_SECRET; do
+              [ -n "${!name:-}" ] || { echo "::error::$name is required when BILLING_PROVIDER=asaas"; exit 1; }
+            done
+          fi
+      - name: Apply tracked database migrations
         run: npm run db:migrate
+      - name: Sync API Worker secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          put_secret() {
+            local target="$1" source="$2" value="${!2:-}"
+            [ -z "$value" ] && return 0
+            printf '%s' "$value" | npx wrangler secret put "$target" --env "$TARGET_ENV" --config workers/api/wrangler.jsonc >/dev/null
+          }
+          put_secret DATABASE_URL DATABASE_URL
+          put_secret AUTH_SECRET AUTH_SECRET
+          put_secret TURNSTILE_SECRET TURNSTILE_SECRET
+          put_secret BREVO_API_KEY BREVO_API_KEY
+          put_secret EMAIL_FROM EMAIL_FROM
+          put_secret CLOUDFLARE_API_TOKEN SAAS_CLOUDFLARE_API_TOKEN
+          put_secret CLOUDFLARE_ZONE_ID CLOUDFLARE_ZONE_ID
+          put_secret SAAS_CNAME_TARGET SAAS_CNAME_TARGET
+          put_secret BILLING_PROVIDER BILLING_PROVIDER
+          put_secret BILLING_API_URL BILLING_API_URL
+          put_secret BILLING_API_KEY BILLING_API_KEY
+          put_secret BILLING_WEBHOOK_SECRET BILLING_WEBHOOK_SECRET
+      - name: Sync public-site Worker database secret
+        shell: bash
+        run: printf '%s' "$DATABASE_URL" | npx wrangler secret put DATABASE_URL --env "$TARGET_ENV" --config workers/public-site/wrangler.jsonc >/dev/null
       - name: Deploy API to production
         run: npx wrangler deploy --env production --config workers/api/wrangler.jsonc
+      - name: Deploy public site to production
+        run: npx wrangler deploy --env production --config workers/public-site/wrangler.jsonc
       - name: Smoke test production API
-        id: smoke
+        id: api_smoke
         continue-on-error: true
-        run: curl --fail --show-error --silent --retry 4 --retry-delay 3 https://api.nexoio.com.br/health | grep -q '"status":"ok"'
-      - name: Rollback production on failed smoke test
-        if: steps.smoke.outcome == 'failure'
-        run: npx wrangler rollback --env production --config workers/api/wrangler.jsonc --message "Automatic rollback after failed production smoke test"
-      - name: Fail after rollback
-        if: steps.smoke.outcome == 'failure'
+        run: |
+          curl --fail --show-error --silent --retry 5 --retry-delay 3 https://api.nexoio.com.br/ready | grep -q '"status":"ready"'
+      - name: Smoke test production public-site Worker
+        id: site_smoke
+        continue-on-error: true
+        run: |
+          curl --fail --show-error --silent --retry 5 --retry-delay 3 "${PUBLIC_SITE_SMOKE_URL%/}/__health" | grep -q '"status":"ok"'
+      - name: Rollback production API on failed API smoke test
+        if: steps.api_smoke.outcome == 'failure'
+        run: npx wrangler rollback --env production --config workers/api/wrangler.jsonc --message "Automatic rollback after failed production API smoke test"
+      - name: Rollback production public site on failed site smoke test
+        if: steps.site_smoke.outcome == 'failure'
+        run: npx wrangler rollback --env production --config workers/public-site/wrangler.jsonc --message "Automatic rollback after failed production public-site smoke test"
+      - name: Fail production after rollback
+        if: steps.api_smoke.outcome == 'failure' || steps.site_smoke.outcome == 'failure'
         run: exit 1
