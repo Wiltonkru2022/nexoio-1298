@@ -55,12 +55,13 @@ describe('critical security policy',()=>{
 
   it('keeps tenant columns on sensitive operational tables',async()=>{
     if(!connection)return;
+    const expected=['orders','service_orders','patients','clinical_records','payables','receivables','inventory_balances','subscriptions'];
     const rows=await connection<{table_name:string}[]>`
       select table_name from information_schema.columns
       where table_schema='public' and column_name='business_id'
-        and table_name in ('orders','service_orders','patients','clinical_records','financial_accounts','inventory_balances','subscriptions')
+        and table_name in ('orders','service_orders','patients','clinical_records','payables','receivables','inventory_balances','subscriptions')
     `;
-    expect(new Set(rows.map(row=>row.table_name))).toEqual(new Set(['orders','service_orders','patients','clinical_records','financial_accounts','inventory_balances','subscriptions']));
+    expect(new Set(rows.map(row=>row.table_name))).toEqual(new Set(expected));
   });
 
   it('installs before-after audit triggers for sensitive tables',async()=>{
@@ -71,7 +72,7 @@ describe('critical security policy',()=>{
       where not t.tgisinternal and t.tgname like 'audit_%_changes'
     `;
     const names=new Set(rows.map(row=>row.relname));
-    for(const table of ['financial_accounts','cash_sessions','sales','patients','clinical_records','business_public_profiles','business_domains','subscriptions'])expect(names.has(table)).toBe(true);
+    for(const table of ['payables','receivables','cash_sessions','sales','patients','clinical_records','business_public_profiles','business_domains','subscriptions'])expect(names.has(table)).toBe(true);
   });
 
   it('records before and after images at database level',async()=>{
