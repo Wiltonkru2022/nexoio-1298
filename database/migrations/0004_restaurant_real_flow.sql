@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS restaurant_tabs (
   table_id uuid REFERENCES restaurant_tables(id),
   customer_id uuid REFERENCES customers(id),
   channel text NOT NULL DEFAULT 'table',
+  fulfillment_json jsonb NOT NULL DEFAULT '{}'::jsonb,
   status text NOT NULL DEFAULT 'active',
   subtotal numeric(14,2) NOT NULL DEFAULT 0,
   discount numeric(14,2) NOT NULL DEFAULT 0,
@@ -33,7 +34,7 @@ CREATE TABLE IF NOT EXISTS restaurant_tabs (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT restaurant_tabs_status_chk CHECK (status IN ('active','awaiting_closure','payment_processing','paid','closed','cancelled')),
-  CONSTRAINT restaurant_tabs_channel_chk CHECK (channel IN ('table','counter','delivery')),
+  CONSTRAINT restaurant_tabs_channel_chk CHECK (channel IN ('table','counter','pickup','delivery')),
   CONSTRAINT restaurant_tabs_business_code_uq UNIQUE (business_id, code)
 );
 ALTER TABLE restaurant_tables DROP CONSTRAINT IF EXISTS restaurant_tables_current_tab_fk;
