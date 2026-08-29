@@ -1,3 +1,4 @@
+/* global process, console, setTimeout, clearTimeout, fetch, Buffer */
 import net from 'node:net';
 
 const apiUrl=(process.env.NEXOIO_API_URL||'http://localhost:8787').replace(/\/$/,'');
