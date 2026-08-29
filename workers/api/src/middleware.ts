@@ -56,9 +56,38 @@ export function requirePolicyLimit(key:string,value:number){
 }
 export function requireModule(moduleCode: string) {
   return createMiddleware<ApiEnv>(async (c, next) => {
-    const { businessModules } = await import('@nexoio/db'); const { and, eq } = await import('drizzle-orm');
-    const active = await c.get('db').select({ id: businessModules.id }).from(businessModules).where(and(eq(businessModules.businessId, c.get('auth').businessId), eq(businessModules.moduleCode, moduleCode), eq(businessModules.enabled, true))).limit(1);
-    return active[0] ? next() : error(c, 403, 'MODULE_DISABLED', 'Este módulo não está habilitado para a empresa');
+    const db=c.get('db');
+    const businessId=c.get('auth').businessId;
+    const moduleResult:any=await db.execute(sql`select id from business_modules where business_id=${businessId}::uuid and module_code=${moduleCode} and enabled=true limit 1`);
+    const moduleRows:any[]=moduleResult?.rows??moduleResult??[];
+    if(!moduleRows.length)return error(c,403,'MODULE_DISABLED','Este módulo não está habilitado para a empresa');
+
+    const subscriptionResult:any=await db.execute(sql`
+      select s.id,s.status,s.trial_ends_at,s.current_period_end,s.past_due_since,s.cancel_at_period_end,p.id plan_id,
+        (select jsonb_build_object('enabled',pf.enabled,'limit',pf.limit_value,'feature',pf.feature_code)
+           from plan_features pf
+          where pf.plan_id=p.id and pf.feature_code in (${`module:${moduleCode}`},${moduleCode})
+          order by case when pf.feature_code=${`module:${moduleCode}`} then 0 else 1 end
+          limit 1) entitlement
+      from subscriptions s join plans p on p.id=s.plan_id
+      where s.business_id=${businessId}::uuid limit 1
+    `);
+    const subscription:any=(subscriptionResult?.rows??subscriptionResult??[])[0];
+    // Legacy businesses created before billing rollout remain compatible until a subscription row exists.
+    if(!subscription)return next();
+
+    const status=String(subscription.status??'').toLowerCase();
+    const now=Date.now();
+    const graceMs=3*24*60*60*1000;
+    const pastDueSince=subscription.past_due_since?new Date(subscription.past_due_since).getTime():null;
+    const hardBlocked=['cancelled','canceled','expired','suspended','inactive'].includes(status);
+    const graceExpired=status==='past_due'&&pastDueSince!==null&&now-pastDueSince>graceMs;
+    const trialExpired=status==='trialing'&&subscription.trial_ends_at&&new Date(subscription.trial_ends_at).getTime()<now;
+    if(hardBlocked||graceExpired||trialExpired)return error(c,402,'SUBSCRIPTION_REQUIRED','A assinatura da empresa não permite usar este módulo',{status,graceDays:status==='past_due'?3:undefined});
+
+    const entitlement=subscription.entitlement as {enabled?:boolean;limit?:number|string|null;feature?:string}|null;
+    if(entitlement&&entitlement.enabled===false)return error(c,403,'PLAN_FEATURE_DISABLED','Este módulo não faz parte do plano contratado',{moduleCode,feature:entitlement.feature});
+    return next();
   });
 }
 export function error(c: any, status: number, code: string, message: string, details?: unknown) {
