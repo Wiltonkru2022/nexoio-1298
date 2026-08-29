@@ -1,4 +1,4 @@
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { businessMemberships, businesses, memberInvitations, professionals, roles, users } from '@nexoio/db';
@@ -8,6 +8,7 @@ import type { ApiEnv } from '../types';
 
 export const teamRoutes=new Hono<ApiEnv>();
 const id=z.uuid();
+const rows=(result:any)=>result?.rows??result??[];
 const digest=async(value:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))).map(x=>x.toString(16).padStart(2,'0')).join('');
 const parseSender=(value:string)=>{const match=value.match(/^\s*(.*?)\s*<([^<>]+)>\s*$/);return match?{name:match[1]||'Nexoio',email:match[2]!.trim()}:{name:'Nexoio',email:value.trim()}};
 
@@ -62,6 +63,38 @@ teamRoutes.patch('/team/professionals/:professionalId',requirePermission('team.u
   if(body.data.userId){const check=await validateProfessionalUser(c,body.data.userId,professionalId.data);if(!check.ok)return check.response;}
   await db.update(professionals).set(body.data).where(and(eq(professionals.id,professionalId.data),eq(professionals.businessId,businessId)));
   return c.json({data:{id:professionalId.data,...body.data}});
+});
+
+const commissionBody=z.object({professionalId:id.nullish(),itemType:z.enum(['product','service','all']),productId:id.nullish(),serviceId:id.nullish(),ratePercent:z.coerce.number().finite().min(0).max(100).default(0),fixedAmount:z.coerce.number().finite().nonnegative().default(0),active:z.boolean().optional()}).refine(value=>value.ratePercent>0||value.fixedAmount>0,{message:'Informe percentual ou valor fixo'});
+async function validateCommissionLinks(c:any,data:{professionalId?:string|null;itemType:'product'|'service'|'all';productId?:string|null;serviceId?:string|null}){
+  const businessId=c.get('auth').businessId,db=c.get('db');
+  if(data.professionalId){const r=await db.execute(sql`select id from professionals where id=${data.professionalId}::uuid and business_id=${businessId}::uuid limit 1`);if(!rows(r).length)return error(c,422,'PROFESSIONAL_NOT_FOUND','Profissional não pertence a esta empresa');}
+  if(data.productId){if(data.itemType!=='product')return error(c,422,'INVALID_COMMISSION_TARGET','Produto só pode ser informado em regra de produto');const r=await db.execute(sql`select id from products where id=${data.productId}::uuid and business_id=${businessId}::uuid limit 1`);if(!rows(r).length)return error(c,422,'PRODUCT_NOT_FOUND','Produto não pertence a esta empresa');}
+  if(data.serviceId){if(data.itemType!=='service')return error(c,422,'INVALID_COMMISSION_TARGET','Serviço só pode ser informado em regra de serviço');const r=await db.execute(sql`select id from services where id=${data.serviceId}::uuid and business_id=${businessId}::uuid limit 1`);if(!rows(r).length)return error(c,422,'SERVICE_NOT_FOUND','Serviço não pertence a esta empresa');}
+  if(data.itemType==='all'&&(data.productId||data.serviceId))return error(c,422,'INVALID_COMMISSION_TARGET','Regra geral não pode apontar produto ou serviço específico');
+  return null;
+}
+
+teamRoutes.get('/commission-rules',requirePermission('finance.read'),async c=>{
+  const r=await c.get('db').execute(sql`select cr.*,p.display_name professional_name,pr.name product_name,s.name service_name from commission_rules cr left join professionals p on p.id=cr.professional_id and p.business_id=cr.business_id left join products pr on pr.id=cr.product_id and pr.business_id=cr.business_id left join services s on s.id=cr.service_id and s.business_id=cr.business_id where cr.business_id=${c.get('auth').businessId}::uuid order by cr.active desc,cr.created_at desc`);
+  return c.json({data:rows(r)});
+});
+
+teamRoutes.post('/commission-rules',requirePermission('finance.create'),async c=>{
+  const body=commissionBody.safeParse(await c.req.json().catch(()=>null));if(!body.success)return error(c,422,'VALIDATION_ERROR','Regra de comissão inválida',body.error.flatten());
+  const invalid=await validateCommissionLinks(c,body.data);if(invalid)return invalid;const recordId=uuidv7();
+  await c.get('db').execute(sql`insert into commission_rules(id,business_id,professional_id,item_type,product_id,service_id,rate_percent,fixed_amount,active) values(${recordId},${c.get('auth').businessId}::uuid,${body.data.professionalId??null}::uuid,${body.data.itemType},${body.data.productId??null}::uuid,${body.data.serviceId??null}::uuid,${body.data.ratePercent},${body.data.fixedAmount},${body.data.active??true})`);
+  return c.json({data:{id:recordId,...body.data,active:body.data.active??true}},201);
+});
+
+teamRoutes.patch('/commission-rules/:ruleId',requirePermission('finance.create'),async c=>{
+  const ruleId=id.safeParse(c.req.param('ruleId'));if(!ruleId.success)return error(c,422,'VALIDATION_ERROR','Regra de comissão inválida');const db=c.get('db'),businessId=c.get('auth').businessId;
+  const currentResult=await db.execute(sql`select professional_id,item_type,product_id,service_id,rate_percent,fixed_amount,active from commission_rules where id=${ruleId.data}::uuid and business_id=${businessId}::uuid limit 1`);const current:any=rows(currentResult)[0];if(!current)return error(c,404,'COMMISSION_RULE_NOT_FOUND','Regra de comissão não encontrada');
+  const patch=z.object({professionalId:id.nullable().optional(),itemType:z.enum(['product','service','all']).optional(),productId:id.nullable().optional(),serviceId:id.nullable().optional(),ratePercent:z.coerce.number().finite().min(0).max(100).optional(),fixedAmount:z.coerce.number().finite().nonnegative().optional(),active:z.boolean().optional()}).refine(value=>Object.keys(value).length>0).safeParse(await c.req.json().catch(()=>null));if(!patch.success)return error(c,422,'VALIDATION_ERROR','Alteração de comissão inválida',patch.error.flatten());
+  const next={professionalId:patch.data.professionalId!==undefined?patch.data.professionalId:current.professional_id,itemType:patch.data.itemType??current.item_type,productId:patch.data.productId!==undefined?patch.data.productId:current.product_id,serviceId:patch.data.serviceId!==undefined?patch.data.serviceId:current.service_id,ratePercent:patch.data.ratePercent!==undefined?patch.data.ratePercent:Number(current.rate_percent),fixedAmount:patch.data.fixedAmount!==undefined?patch.data.fixedAmount:Number(current.fixed_amount),active:patch.data.active!==undefined?patch.data.active:Boolean(current.active)};
+  if(next.ratePercent<=0&&next.fixedAmount<=0)return error(c,422,'VALIDATION_ERROR','Informe percentual ou valor fixo');const invalid=await validateCommissionLinks(c,next);if(invalid)return invalid;
+  await db.execute(sql`update commission_rules set professional_id=${next.professionalId??null}::uuid,item_type=${next.itemType},product_id=${next.productId??null}::uuid,service_id=${next.serviceId??null}::uuid,rate_percent=${next.ratePercent},fixed_amount=${next.fixedAmount},active=${next.active},updated_at=now() where id=${ruleId.data}::uuid and business_id=${businessId}::uuid`);
+  return c.json({data:{id:ruleId.data,...next}});
 });
 
 teamRoutes.post('/team/invitations',requirePermission('team.invite'),async c=>{
