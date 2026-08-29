@@ -19,6 +19,18 @@ const CRITICAL_MUTATION_PREFIXES=[
 const isMutation=(method:string)=>['POST','PUT','PATCH','DELETE'].includes(method.toUpperCase());
 export const isCriticalMutation=(method:string,path:string)=>isMutation(method)&&CRITICAL_MUTATION_PREFIXES.some(prefix=>path===prefix||path.startsWith(`${prefix}/`));
 
+export const cloudflareRateLimit=createMiddleware<ApiEnv>(async(c,next)=>{
+  const auth=c.get('auth');
+  const key=`${auth.businessId}:${auth.userId}`;
+  const general=await c.env.API_RATE_LIMITER.limit({key});
+  if(!general.success)return error(c,429,'RATE_LIMITED','Muitas requisições. Aguarde um instante e tente novamente.');
+  if(isCriticalMutation(c.req.method,c.req.path)){
+    const sensitive=await c.env.SENSITIVE_RATE_LIMITER.limit({key:`${key}:${c.req.path.split('/').slice(0,4).join('/')}`});
+    if(!sensitive.success)return error(c,429,'SENSITIVE_RATE_LIMITED','Limite temporário de ações sensíveis atingido.');
+  }
+  await next();
+});
+
 export const requireCriticalMfa=createMiddleware<ApiEnv>(async(c,next)=>{
   if(isCriticalMutation(c.req.method,c.req.path)&&!c.get('sessionUser').twoFactorEnabled){
     return error(c,403,'MFA_REQUIRED','Ative e confirme o MFA para concluir esta ação sensível');
