@@ -38,7 +38,10 @@ jobs:
       BILLING_API_URL: ${{ secrets.BILLING_API_URL }}
       BILLING_API_KEY: ${{ secrets.BILLING_API_KEY }}
       BILLING_WEBHOOK_SECRET: ${{ secrets.BILLING_WEBHOOK_SECRET }}
+      API_PUBLIC_URL: ${{ vars.API_PUBLIC_URL }}
       PUBLIC_SITE_SMOKE_URL: ${{ vars.PUBLIC_SITE_SMOKE_URL }}
+      MERCHANT_SMOKE_URL: ${{ vars.MERCHANT_SMOKE_URL }}
+      ADMIN_SMOKE_URL: ${{ vars.ADMIN_SMOKE_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,7 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           [ "$DEPLOY_GUARD" = "NEXOIO_STAGING" ] || { echo "::error::Invalid staging DEPLOY_GUARD"; exit 1; }
-          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID DATABASE_URL AUTH_SECRET SAAS_CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID SAAS_CNAME_TARGET PUBLIC_SITE_SMOKE_URL; do
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID DATABASE_URL AUTH_SECRET SAAS_CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID SAAS_CNAME_TARGET API_PUBLIC_URL PUBLIC_SITE_SMOKE_URL MERCHANT_SMOKE_URL ADMIN_SMOKE_URL; do
             [ -n "${!name:-}" ] || { echo "::error::$name is required"; exit 1; }
           done
           if [ "${BILLING_PROVIDER,,}" = "asaas" ]; then
@@ -59,6 +62,12 @@ jobs:
               [ -n "${!name:-}" ] || { echo "::error::$name is required when BILLING_PROVIDER=asaas"; exit 1; }
             done
           fi
+      - name: Build Merchant and Admin for staging API
+        shell: bash
+        run: |
+          set -euo pipefail
+          VITE_API_URL="$API_PUBLIC_URL" npm run build -w @nexoio/merchant
+          VITE_API_URL="$API_PUBLIC_URL" npm run build -w @nexoio/admin
       - name: Apply tracked database migrations
         run: npm run db:migrate
       - name: Sync API Worker secrets
@@ -93,24 +102,40 @@ jobs:
         run: npx wrangler deploy --env staging --config workers/api/wrangler.jsonc
       - name: Deploy public site to staging
         run: npx wrangler deploy --env staging --config workers/public-site/wrangler.jsonc
+      - name: Deploy Merchant to staging
+        run: npx wrangler deploy --env staging --config apps/merchant/wrangler.jsonc
+      - name: Deploy Admin to staging
+        run: npx wrangler deploy --env staging --config apps/admin/wrangler.jsonc
       - name: Smoke test staging API
         id: api_smoke
         continue-on-error: true
-        run: |
-          curl --fail --show-error --silent --retry 5 --retry-delay 3 https://api-staging.nexoio.com.br/ready | grep -q '"status":"ready"'
-      - name: Smoke test staging public-site Worker
+        run: curl --fail --show-error --silent --retry 5 --retry-delay 3 "${API_PUBLIC_URL%/}/ready" | grep -q '"status":"ready"'
+      - name: Smoke test staging public site
         id: site_smoke
         continue-on-error: true
-        run: |
-          curl --fail --show-error --silent --retry 5 --retry-delay 3 "${PUBLIC_SITE_SMOKE_URL%/}/__health" | grep -q '"status":"ok"'
-      - name: Rollback staging API on failed API smoke test
+        run: curl --fail --show-error --silent --retry 5 --retry-delay 3 "${PUBLIC_SITE_SMOKE_URL%/}/__health" | grep -q '"status":"ok"'
+      - name: Smoke test staging Merchant
+        id: merchant_smoke
+        continue-on-error: true
+        run: curl --fail --show-error --silent --retry 5 --retry-delay 3 "${MERCHANT_SMOKE_URL%/}/" | grep -q 'id="root"'
+      - name: Smoke test staging Admin
+        id: admin_smoke
+        continue-on-error: true
+        run: curl --fail --show-error --silent --retry 5 --retry-delay 3 "${ADMIN_SMOKE_URL%/}/" | grep -q 'id="root"'
+      - name: Rollback staging API on failed smoke test
         if: steps.api_smoke.outcome == 'failure'
         run: npx wrangler rollback --env staging --config workers/api/wrangler.jsonc --message "Automatic rollback after failed staging API smoke test"
-      - name: Rollback staging public site on failed site smoke test
+      - name: Rollback staging public site on failed smoke test
         if: steps.site_smoke.outcome == 'failure'
         run: npx wrangler rollback --env staging --config workers/public-site/wrangler.jsonc --message "Automatic rollback after failed staging public-site smoke test"
+      - name: Rollback staging Merchant on failed smoke test
+        if: steps.merchant_smoke.outcome == 'failure'
+        run: npx wrangler rollback --env staging --config apps/merchant/wrangler.jsonc --message "Automatic rollback after failed staging Merchant smoke test"
+      - name: Rollback staging Admin on failed smoke test
+        if: steps.admin_smoke.outcome == 'failure'
+        run: npx wrangler rollback --env staging --config apps/admin/wrangler.jsonc --message "Automatic rollback after failed staging Admin smoke test"
       - name: Fail staging after rollback
-        if: steps.api_smoke.outcome == 'failure' || steps.site_smoke.outcome == 'failure'
+        if: steps.api_smoke.outcome == 'failure' || steps.site_smoke.outcome == 'failure' || steps.merchant_smoke.outcome == 'failure' || steps.admin_smoke.outcome == 'failure'
         run: exit 1
 
   deploy-production:
@@ -142,7 +167,10 @@ jobs:
       BILLING_API_URL: ${{ secrets.BILLING_API_URL }}
       BILLING_API_KEY: ${{ secrets.BILLING_API_KEY }}
       BILLING_WEBHOOK_SECRET: ${{ secrets.BILLING_WEBHOOK_SECRET }}
+      API_PUBLIC_URL: ${{ vars.API_PUBLIC_URL }}
       PUBLIC_SITE_SMOKE_URL: ${{ vars.PUBLIC_SITE_SMOKE_URL }}
+      MERCHANT_SMOKE_URL: ${{ vars.MERCHANT_SMOKE_URL }}
+      ADMIN_SMOKE_URL: ${{ vars.ADMIN_SMOKE_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -155,7 +183,7 @@ jobs:
         run: |
           set -euo pipefail
           [ "$DEPLOY_GUARD" = "NEXOIO_PRODUCTION" ] || { echo "::error::Invalid production DEPLOY_GUARD"; exit 1; }
-          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID DATABASE_URL AUTH_SECRET SAAS_CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID SAAS_CNAME_TARGET PUBLIC_SITE_SMOKE_URL; do
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID DATABASE_URL AUTH_SECRET SAAS_CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID SAAS_CNAME_TARGET API_PUBLIC_URL PUBLIC_SITE_SMOKE_URL MERCHANT_SMOKE_URL ADMIN_SMOKE_URL; do
             [ -n "${!name:-}" ] || { echo "::error::$name is required"; exit 1; }
           done
           if [ "${BILLING_PROVIDER,,}" = "asaas" ]; then
@@ -163,6 +191,12 @@ jobs:
               [ -n "${!name:-}" ] || { echo "::error::$name is required when BILLING_PROVIDER=asaas"; exit 1; }
             done
           fi
+      - name: Build Merchant and Admin for production API
+        shell: bash
+        run: |
+          set -euo pipefail
+          VITE_API_URL="$API_PUBLIC_URL" npm run build -w @nexoio/merchant
+          VITE_API_URL="$API_PUBLIC_URL" npm run build -w @nexoio/admin
       - name: Apply tracked database migrations
         run: npm run db:migrate
       - name: Sync API Worker secrets
@@ -197,22 +231,38 @@ jobs:
         run: npx wrangler deploy --env production --config workers/api/wrangler.jsonc
       - name: Deploy public site to production
         run: npx wrangler deploy --env production --config workers/public-site/wrangler.jsonc
+      - name: Deploy Merchant to production
+        run: npx wrangler deploy --env production --config apps/merchant/wrangler.jsonc
+      - name: Deploy Admin to production
+        run: npx wrangler deploy --env production --config apps/admin/wrangler.jsonc
       - name: Smoke test production API
         id: api_smoke
         continue-on-error: true
-        run: |
-          curl --fail --show-error --silent --retry 5 --retry-delay 3 https://api.nexoio.com.br/ready | grep -q '"status":"ready"'
-      - name: Smoke test production public-site Worker
+        run: curl --fail --show-error --silent --retry 5 --retry-delay 3 "${API_PUBLIC_URL%/}/ready" | grep -q '"status":"ready"'
+      - name: Smoke test production public site
         id: site_smoke
         continue-on-error: true
-        run: |
-          curl --fail --show-error --silent --retry 5 --retry-delay 3 "${PUBLIC_SITE_SMOKE_URL%/}/__health" | grep -q '"status":"ok"'
-      - name: Rollback production API on failed API smoke test
+        run: curl --fail --show-error --silent --retry 5 --retry-delay 3 "${PUBLIC_SITE_SMOKE_URL%/}/__health" | grep -q '"status":"ok"'
+      - name: Smoke test production Merchant
+        id: merchant_smoke
+        continue-on-error: true
+        run: curl --fail --show-error --silent --retry 5 --retry-delay 3 "${MERCHANT_SMOKE_URL%/}/" | grep -q 'id="root"'
+      - name: Smoke test production Admin
+        id: admin_smoke
+        continue-on-error: true
+        run: curl --fail --show-error --silent --retry 5 --retry-delay 3 "${ADMIN_SMOKE_URL%/}/" | grep -q 'id="root"'
+      - name: Rollback production API on failed smoke test
         if: steps.api_smoke.outcome == 'failure'
         run: npx wrangler rollback --env production --config workers/api/wrangler.jsonc --message "Automatic rollback after failed production API smoke test"
-      - name: Rollback production public site on failed site smoke test
+      - name: Rollback production public site on failed smoke test
         if: steps.site_smoke.outcome == 'failure'
         run: npx wrangler rollback --env production --config workers/public-site/wrangler.jsonc --message "Automatic rollback after failed production public-site smoke test"
+      - name: Rollback production Merchant on failed smoke test
+        if: steps.merchant_smoke.outcome == 'failure'
+        run: npx wrangler rollback --env production --config apps/merchant/wrangler.jsonc --message "Automatic rollback after failed production Merchant smoke test"
+      - name: Rollback production Admin on failed smoke test
+        if: steps.admin_smoke.outcome == 'failure'
+        run: npx wrangler rollback --env production --config apps/admin/wrangler.jsonc --message "Automatic rollback after failed production Admin smoke test"
       - name: Fail production after rollback
-        if: steps.api_smoke.outcome == 'failure' || steps.site_smoke.outcome == 'failure'
+        if: steps.api_smoke.outcome == 'failure' || steps.site_smoke.outcome == 'failure' || steps.merchant_smoke.outcome == 'failure' || steps.admin_smoke.outcome == 'failure'
         run: exit 1
