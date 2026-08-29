@@ -8,6 +8,7 @@
     "build": "npm run build --workspaces --if-present",
     "dev:api": "npm run dev -w @nexoio/api",
     "dev:merchant": "npm run dev -w @nexoio/merchant",
+    "print-agent": "node tools/restaurant-print-agent.mjs",
     "lint": "eslint .",
     "typecheck": "tsc -b",
     "test": "vitest run",
