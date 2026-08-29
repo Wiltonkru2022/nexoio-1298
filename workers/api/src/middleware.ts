@@ -25,8 +25,12 @@ export const requireAuth = createMiddleware<ApiEnv>(async (c, next) => {
   const db = c.get('db');
   const membership = await db.select({ membershipId: businessMemberships.id, roleId: businessMemberships.roleId, userId: users.id, mfaEnabled: users.mfaEnabled, platformAdmin: users.platformAdmin })
     .from(businessMemberships).innerJoin(users, eq(users.id, businessMemberships.userId))
-    .where(and(eq(businessMemberships.businessId, businessId), eq(users.authUserId, session.user.id), eq(businessMemberships.status, 'active'))).limit(1);
-  if (!membership[0]) return error(c, 404, 'BUSINESS_NOT_FOUND', 'Empresa não encontrada');
+    .where(and(eq(businessMemberships.businessId, businessId), eq(users.authUserId, session.user.id), eq(users.status,'active'), eq(businessMemberships.status, 'active'))).limit(1);
+  if (!membership[0]) {
+    const profile=await db.select({status:users.status}).from(users).where(eq(users.authUserId,session.user.id)).limit(1);
+    if(profile[0]&&profile[0].status!=='active')return error(c,403,'USER_SUSPENDED','Usuário suspenso pela administração da plataforma');
+    return error(c, 404, 'BUSINESS_NOT_FOUND', 'Empresa não encontrada');
+  }
   const [grants, overrideResult, limitResult] = await Promise.all([
     db.select({ code: rolePermissions.permissionCode }).from(rolePermissions).where(eq(rolePermissions.roleId, membership[0].roleId)),
     db.execute(sql`select permission_code,allowed from membership_permission_overrides where membership_id=${membership[0].membershipId}::uuid`),
@@ -45,6 +49,8 @@ export const requireAuth = createMiddleware<ApiEnv>(async (c, next) => {
 export const requireSession = createMiddleware<ApiEnv>(async (c, next) => {
   const session = await createAuth(c.env).api.getSession({ headers: c.req.raw.headers });
   if (!session) return error(c, 401, 'SESSION_EXPIRED', 'Sua sessão expirou');
+  const profile=(await c.get('db').select({status:users.status}).from(users).where(eq(users.authUserId,session.user.id)).limit(1))[0];
+  if(profile&&profile.status!=='active')return error(c,403,'USER_SUSPENDED','Usuário suspenso pela administração da plataforma');
   c.set('sessionUser', session.user); await next();
 });
 
