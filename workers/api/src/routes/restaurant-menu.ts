@@ -10,12 +10,12 @@ const rows=(r:any)=>r?.rows??r??[];
 const id=z.uuid();
 const MAX_FILE_BYTES=10*1024*1024;
 const imageTypes=new Set(['image/jpeg','image/png','image/webp','image/gif','image/avif']);
-const productBody=z.object({name:z.string().trim().min(2).max(200),sku:z.string().trim().max(80).nullish(),description:z.string().trim().max(5000).nullish(),salePrice:z.coerce.number().finite().min(0),minimumStock:z.coerce.number().finite().min(0).default(0),active:z.boolean().default(true)}).strict();
+const productBody=z.object({name:z.string().trim().min(2).max(200),sku:z.string().trim().max(80).nullish(),description:z.string().trim().max(5000).nullish(),salePrice:z.coerce.number().finite().min(0),minimumStock:z.coerce.number().finite().min(0).default(0),stockControlEnabled:z.boolean().default(false),active:z.boolean().default(true)}).strict();
 
 restaurantMenuRoutes.get('/menu/products',requirePermission('orders.read'),async c=>{
   const origin=new URL(c.req.url).origin;
   const r=await c.get('db').execute(sql`
-    select p.id,p.name,p.sku,p.description,p.sale_price,p.minimum_stock,p.active,p.primary_image_file_id,
+    select p.id,p.name,p.sku,p.description,p.sale_price,p.minimum_stock,p.stock_control_enabled,p.active,p.primary_image_file_id,
       case when p.primary_image_file_id is not null then ${origin} || '/api/public/media/' || p.primary_image_file_id::text else null end image_url,
       coalesce((select jsonb_agg(pc.name order by pc.sort_order,pc.name) from product_category_links pcl join product_categories pc on pc.id=pcl.category_id and pc.business_id=p.business_id where pcl.business_id=p.business_id and pcl.product_id=p.id and pc.active=true),'[]'::jsonb) categories
     from products p where p.business_id=${c.get('auth').businessId}::uuid order by p.active desc,p.name asc
@@ -25,14 +25,14 @@ restaurantMenuRoutes.get('/menu/products',requirePermission('orders.read'),async
 
 restaurantMenuRoutes.post('/menu/products',requirePermission('orders.write'),async c=>{
   const p=productBody.safeParse(await c.req.json().catch(()=>null));if(!p.success)return error(c,422,'VALIDATION_ERROR','Item do cardápio inválido',p.error.flatten());
-  const productId=uuidv7();await c.get('db').execute(sql`insert into products(id,business_id,sku,name,description,sale_price,stock_control_enabled,minimum_stock,active) values(${productId},${c.get('auth').businessId}::uuid,${p.data.sku||null},${p.data.name},${p.data.description||null},${p.data.salePrice},true,${p.data.minimumStock},${p.data.active})`);
+  const productId=uuidv7();await c.get('db').execute(sql`insert into products(id,business_id,sku,name,description,sale_price,stock_control_enabled,minimum_stock,active) values(${productId},${c.get('auth').businessId}::uuid,${p.data.sku||null},${p.data.name},${p.data.description||null},${p.data.salePrice},${p.data.stockControlEnabled},${p.data.minimumStock},${p.data.active})`);
   return c.json({data:{id:productId,...p.data,imageUrl:null}},201);
 });
 
 restaurantMenuRoutes.patch('/menu/products/:id',requirePermission('orders.write'),async c=>{
   const productId=id.safeParse(c.req.param('id'));const p=productBody.partial().refine(v=>Object.keys(v).length>0).safeParse(await c.req.json().catch(()=>null));if(!productId.success||!p.success)return error(c,422,'VALIDATION_ERROR','Item do cardápio inválido');
   const current:any=rows(await c.get('db').execute(sql`select * from products where id=${productId.success?productId.data:null}::uuid and business_id=${c.get('auth').businessId}::uuid limit 1`))[0];if(!current)return error(c,404,'NOT_FOUND','Item não encontrado');const d=p.data;
-  const r=await c.get('db').execute(sql`update products set name=${d.name??current.name},sku=${d.sku===undefined?current.sku:(d.sku||null)},description=${d.description===undefined?current.description:(d.description||null)},sale_price=${d.salePrice??Number(current.sale_price)},minimum_stock=${d.minimumStock??Number(current.minimum_stock??0)},active=${d.active??current.active},updated_at=now() where id=${productId.data}::uuid and business_id=${c.get('auth').businessId}::uuid returning id,name,sku,description,sale_price,minimum_stock,active,primary_image_file_id`);
+  const r=await c.get('db').execute(sql`update products set name=${d.name??current.name},sku=${d.sku===undefined?current.sku:(d.sku||null)},description=${d.description===undefined?current.description:(d.description||null)},sale_price=${d.salePrice??Number(current.sale_price)},minimum_stock=${d.minimumStock??Number(current.minimum_stock??0)},stock_control_enabled=${d.stockControlEnabled??current.stock_control_enabled},active=${d.active??current.active},updated_at=now() where id=${productId.data}::uuid and business_id=${c.get('auth').businessId}::uuid returning id,name,sku,description,sale_price,minimum_stock,stock_control_enabled,active,primary_image_file_id`);
   return c.json({data:rows(r)[0]});
 });
 
