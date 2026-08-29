@@ -1,7 +1,7 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { businessMemberships, businesses, memberInvitations, roles, users } from '@nexoio/db';
+import { businessMemberships, businesses, memberInvitations, professionals, roles, users } from '@nexoio/db';
 import { uuidv7 } from '@nexoio/core';
 import { error, requirePermission } from '../middleware';
 import type { ApiEnv } from '../types';
@@ -31,6 +31,37 @@ teamRoutes.get('/team/roles',requirePermission('team.read'),async c=>{
 teamRoutes.get('/team/invitations',requirePermission('team.read'),async c=>{
   const data=await c.get('db').select({id:memberInvitations.id,email:memberInvitations.email,roleId:memberInvitations.roleId,status:memberInvitations.status,expiresAt:memberInvitations.expiresAt,createdAt:memberInvitations.createdAt,roleName:roles.name}).from(memberInvitations).innerJoin(roles,eq(roles.id,memberInvitations.roleId)).where(eq(memberInvitations.businessId,c.get('auth').businessId)).orderBy(desc(memberInvitations.createdAt));
   return c.json({data});
+});
+
+teamRoutes.get('/team/professionals',requirePermission('team.read'),async c=>{
+  const businessId=c.get('auth').businessId;
+  const data=await c.get('db').select({id:professionals.id,displayName:professionals.displayName,userId:professionals.userId,active:professionals.active,userName:users.name,userEmail:users.email}).from(professionals).leftJoin(users,eq(users.id,professionals.userId)).where(eq(professionals.businessId,businessId)).orderBy(desc(professionals.active),professionals.displayName);
+  return c.json({data});
+});
+
+async function validateProfessionalUser(c:any,userId:string,professionalId?:string){
+  const businessId=c.get('auth').businessId,db=c.get('db');
+  const membership=(await db.select({id:businessMemberships.id}).from(businessMemberships).where(and(eq(businessMemberships.businessId,businessId),eq(businessMemberships.userId,userId),eq(businessMemberships.status,'active'))).limit(1))[0];
+  if(!membership)return {ok:false as const,response:error(c,422,'MEMBER_NOT_ACTIVE','O usuário selecionado não possui acesso ativo a esta empresa')};
+  const predicates=[eq(professionals.businessId,businessId),eq(professionals.userId,userId)];if(professionalId)predicates.push(ne(professionals.id,professionalId));
+  const duplicate=(await db.select({id:professionals.id}).from(professionals).where(and(...predicates)).limit(1))[0];
+  if(duplicate)return {ok:false as const,response:error(c,409,'PROFESSIONAL_USER_ALREADY_LINKED','Este usuário já está vinculado a outro perfil profissional')};
+  return {ok:true as const};
+}
+
+teamRoutes.post('/team/professionals',requirePermission('team.update'),async c=>{
+  const body=z.object({displayName:z.string().trim().min(2).max(180),userId:id.nullish()}).safeParse(await c.req.json().catch(()=>null));if(!body.success)return error(c,422,'VALIDATION_ERROR','Profissional inválido');
+  if(body.data.userId){const check=await validateProfessionalUser(c,body.data.userId);if(!check.ok)return check.response;}
+  const recordId=uuidv7();await c.get('db').insert(professionals).values({id:recordId,businessId:c.get('auth').businessId,userId:body.data.userId??null,displayName:body.data.displayName,active:true});
+  return c.json({data:{id:recordId,displayName:body.data.displayName,userId:body.data.userId??null,active:true}},201);
+});
+
+teamRoutes.patch('/team/professionals/:professionalId',requirePermission('team.update'),async c=>{
+  const professionalId=id.safeParse(c.req.param('professionalId'));const body=z.object({displayName:z.string().trim().min(2).max(180).optional(),userId:id.nullable().optional(),active:z.boolean().optional()}).refine(value=>value.displayName!==undefined||value.userId!==undefined||value.active!==undefined).safeParse(await c.req.json().catch(()=>null));if(!professionalId.success||!body.success)return error(c,422,'VALIDATION_ERROR','Alteração de profissional inválida');
+  const businessId=c.get('auth').businessId,db=c.get('db');const current=(await db.select({id:professionals.id}).from(professionals).where(and(eq(professionals.id,professionalId.data),eq(professionals.businessId,businessId))).limit(1))[0];if(!current)return error(c,404,'PROFESSIONAL_NOT_FOUND','Profissional não encontrado');
+  if(body.data.userId){const check=await validateProfessionalUser(c,body.data.userId,professionalId.data);if(!check.ok)return check.response;}
+  await db.update(professionals).set(body.data).where(and(eq(professionals.id,professionalId.data),eq(professionals.businessId,businessId)));
+  return c.json({data:{id:professionalId.data,...body.data}});
 });
 
 teamRoutes.post('/team/invitations',requirePermission('team.invite'),async c=>{
