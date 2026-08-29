@@ -5,6 +5,7 @@ import { SubscriptionPanel } from '../components/SubscriptionPanel';
 import { Field, Modal } from '../components/Modal';
 import { PageHeader } from '../components/PageHeader';
 import { api, ApiError } from '../lib/api';
+import './restaurant-flow.css';
 type ModuleRow={key:string;name:string;description:string;dependencies:string[];enabled:boolean|null;source:string|null};
 type CommandMode='automatic'|'manual'|'table_only';
 const moduleNames:Record<string,string>={overview:'Visão geral',customers:'Clientes',sales:'Vendas',cash:'Caixa',finance:'Financeiro',team:'Equipe',settings:'Configurações',schedule:'Agenda',products:'Produtos',services:'Serviços',inventory:'Estoque',orders:'Pedidos',tables:'Mesas',commands:'Comandas',menu:'Cardápio',kitchen:'Cozinha',delivery:'Entrega',service_orders:'Ordens de serviço',equipment:'Equipamentos',quotes:'Orçamentos',suppliers:'Fornecedores',classes:'Turmas',checkin:'Controle de entrada',plans:'Planos',patients:'Pacientes',procedures:'Procedimentos',professionals:'Profissionais'};
