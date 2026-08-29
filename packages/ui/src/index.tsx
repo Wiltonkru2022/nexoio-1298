@@ -1,4 +1,4 @@
-import type { AnchorHTMLAttributes, ButtonHTMLAttributes, PropsWithChildren, ReactNode } from 'react';
+import { useState, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type PropsWithChildren, type ReactNode } from 'react';
 import { Icon } from './experience';
 import './foundations.css';
 import './styles.css';
@@ -45,5 +45,16 @@ export function PageState({kind,title,description,action}:{kind:'empty'|'error'|
 export function Tabs({items,value,onChange}:{items:Array<{value:string;label:string}>;value:string;onChange:(value:string)=>void}){return <div className="nx-tabs" role="tablist">{items.map(item=><button type="button" role="tab" aria-selected={value===item.value} onClick={()=>onChange(item.value)} key={item.value}>{item.label}</button>)}</div>}
 
 export function Shell({ title, subtitle, children, nav, actions }: PropsWithChildren<{ title: string; subtitle?: string; nav?: ReactNode; actions?: ReactNode }>) {
-  return <div className="shell"><aside><div><Brand/><p className="workspace-label">Plataforma de gestão</p>{nav}</div><div className="sidebar-footer"><div className="avatar">NX</div><div><strong>Minha empresa</strong><small>Ambiente seguro</small></div></div></aside><main><div className="topbar"><div><p className="eyebrow">NEXOIO</p><h1>{title}</h1>{subtitle && <p className="subtitle">{subtitle}</p>}</div>{actions && <div className="topbar-actions">{actions}</div>}</div>{children}</main></div>;
+  const [mobileNavOpen,setMobileNavOpen]=useState(false);
+  return <div className="shell">
+    {mobileNavOpen?<button type="button" className="mobile-shell-overlay" aria-label="Fechar menu" onClick={()=>setMobileNavOpen(false)}/>:null}
+    <aside className={mobileNavOpen?'mobile-open':''} aria-label="Navegação principal">
+      <div><div className="mobile-sidebar-head"><Brand/><button type="button" className="mobile-sidebar-close" aria-label="Fechar menu" onClick={()=>setMobileNavOpen(false)}>×</button></div><p className="workspace-label">Plataforma de gestão</p><div onClick={()=>setMobileNavOpen(false)}>{nav}</div></div>
+      <div className="sidebar-footer"><div className="avatar">NX</div><div><strong>Minha empresa</strong><small>Ambiente seguro</small></div></div>
+    </aside>
+    <main>
+      <div className="mobile-shell-bar"><button type="button" className="mobile-shell-toggle" aria-label="Abrir menu" aria-expanded={mobileNavOpen} onClick={()=>setMobileNavOpen(true)}>☰</button><Brand/></div>
+      <div className="topbar"><div><p className="eyebrow">NEXOIO</p><h1>{title}</h1>{subtitle && <p className="subtitle">{subtitle}</p>}</div>{actions && <div className="topbar-actions">{actions}</div>}</div>{children}
+    </main>
+  </div>;
 }
