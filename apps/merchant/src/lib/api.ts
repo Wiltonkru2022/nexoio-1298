@@ -7,9 +7,43 @@ const translatedErrors:Record<string,string>={PASSWORD_TOO_SHORT:'A senha precis
 type CacheEntry={value:unknown;expiresAt:number};
 const getCache=new Map<string,CacheEntry>();
 const inflightGet=new Map<string,Promise<unknown>>();
-const DEFAULT_GET_TTL=15000;
+const DEFAULT_GET_TTL=30000;
 
-function clearGetCache(){getCache.clear();inflightGet.clear()}
+function clearGetCache(prefixes?:string[]){
+  if(!prefixes?.length){getCache.clear();inflightGet.clear();return}
+  for(const key of [...getCache.keys()])if(prefixes.some(prefix=>key.startsWith(prefix)))getCache.delete(key);
+  for(const key of [...inflightGet.keys()])if(prefixes.some(prefix=>key.startsWith(prefix)))inflightGet.delete(key);
+}
+
+function relatedPrefixes(path:string){
+  const rules:Array<[string,string[]]>=[
+    ['/api/v1/sales',['/api/v1/sales','/api/v1/products','/api/v1/inventory','/api/v1/customers','/api/v1/cash','/api/v1/finance','/api/v1/commission']],
+    ['/api/v1/customers',['/api/v1/customers','/api/v1/sales','/api/v1/appointments','/api/v1/enrollments','/api/v1/patients']],
+    ['/api/v1/products',['/api/v1/products','/api/v1/menu','/api/v1/inventory','/api/v1/sales','/api/v1/variations','/api/v1/combos']],
+    ['/api/v1/services',['/api/v1/services','/api/v1/appointments','/api/v1/sales','/api/v1/commission']],
+    ['/api/v1/appointments',['/api/v1/appointments']],
+    ['/api/v1/inventory',['/api/v1/inventory','/api/v1/products','/api/v1/purchase-orders']],
+    ['/api/v1/purchase-orders',['/api/v1/purchase-orders','/api/v1/inventory','/api/v1/products']],
+    ['/api/v1/suppliers',['/api/v1/suppliers','/api/v1/purchase-orders']],
+    ['/api/v1/finance',['/api/v1/finance','/api/v1/cash','/api/v1/membership-installments']],
+    ['/api/v1/cash',['/api/v1/cash','/api/v1/finance']],
+    ['/api/v1/service-orders',['/api/v1/service-orders','/api/v1/quotes','/api/v1/service-order-parts','/api/v1/warranties']],
+    ['/api/v1/patients',['/api/v1/patients','/api/v1/medical-records','/api/v1/clinical-procedures']],
+    ['/api/v1/medical-records',['/api/v1/medical-records','/api/v1/patients']],
+    ['/api/v1/clinical-procedures',['/api/v1/clinical-procedures']],
+    ['/api/v1/enrollments',['/api/v1/enrollments','/api/v1/membership-installments','/api/v1/checkins']],
+    ['/api/v1/membership-plans',['/api/v1/membership-plans','/api/v1/enrollments']],
+    ['/api/v1/membership-installments',['/api/v1/membership-installments','/api/v1/finance']],
+    ['/api/v1/classes',['/api/v1/classes','/api/v1/checkins']],
+    ['/api/v1/checkins',['/api/v1/checkins','/api/v1/enrollments']],
+    ['/api/v1/restaurant',['/api/v1/restaurant','/api/v1/orders','/api/v1/tables','/api/v1/commands','/api/v1/cash']],
+    ['/api/v1/orders',['/api/v1/orders','/api/v1/restaurant','/api/v1/kitchen','/api/v1/delivery','/api/v1/cash']],
+    ['/api/v1/platform',['/api/v1/platform']],
+  ];
+  const matched=rules.find(([prefix])=>path.startsWith(prefix));
+  if(matched)return matched[1];
+  const parts=path.split('/').filter(Boolean);return parts.length>=3?[`/${parts.slice(0,3).join('/')}`]:[path];
+}
 
 export function navigate(path:string,replace=false){
   if(`${location.pathname}${location.search}`===path)return;
@@ -38,25 +72,17 @@ export async function apiRequest<T>(path:string,options:RequestInit&{timeoutMs?:
 }
 
 async function getCached<T>(path:string,ttlMs=DEFAULT_GET_TTL,force=false):Promise<T>{
-  const now=Date.now();
-  const cached=getCache.get(path);
+  const now=Date.now();const cached=getCache.get(path);
   if(!force&&cached&&cached.expiresAt>now)return cached.value as T;
-  const running=inflightGet.get(path);
-  if(!force&&running)return running as Promise<T>;
-  const request=apiRequest<T>(path).then(value=>{getCache.set(path,{value,expiresAt:Date.now()+ttlMs});return value}).finally(()=>inflightGet.delete(path));
-  inflightGet.set(path,request as Promise<unknown>);
-  return request;
+  const running=inflightGet.get(path);if(!force&&running)return running as Promise<T>;
+  const request=apiRequest<T>(path).then(value=>{getCache.set(path,{value,expiresAt:Date.now()+ttlMs});return value}).finally(()=>inflightGet.delete(path));inflightGet.set(path,request as Promise<unknown>);return request;
 }
 
-async function mutate<T>(path:string,options:RequestInit&{timeoutMs?:number}):Promise<T>{
-  const result=await apiRequest<T>(path,options);
-  clearGetCache();
-  return result;
-}
+async function mutate<T>(path:string,options:RequestInit&{timeoutMs?:number}):Promise<T>{const result=await apiRequest<T>(path,options);clearGetCache(relatedPrefixes(path));return result}
 
 export const api={
   get:<T>(path:string,options?:{ttlMs?:number;force?:boolean})=>getCached<T>(path,options?.ttlMs??DEFAULT_GET_TTL,options?.force??false),
-  invalidate:clearGetCache,
+  invalidate:(prefixes?:string|string[])=>clearGetCache(typeof prefixes==='string'?[prefixes]:prefixes),
   post:<T>(path:string,body?:unknown)=>mutate<T>(path,{method:'POST',body:body===undefined?undefined:JSON.stringify(body)}),
   put:<T>(path:string,body:unknown)=>mutate<T>(path,{method:'PUT',body:JSON.stringify(body)}),
   patch:<T>(path:string,body:unknown)=>mutate<T>(path,{method:'PATCH',body:JSON.stringify(body)}),
