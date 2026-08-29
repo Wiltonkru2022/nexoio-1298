@@ -4,6 +4,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Field, Modal } from '../components/Modal';
 import { api, ApiError } from '../lib/api';
 import './restaurant-operations.css';
+import './restaurant-menu.css';
 
 type Product={id:string;name:string;sku?:string|null;description?:string|null;sale_price:number|string;minimum_stock?:number|string|null;active:boolean;primary_image_file_id?:string|null;image_url?:string|null};
 const brl=(v:number|string|undefined)=>Number(v??0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
