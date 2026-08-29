@@ -10,6 +10,8 @@ export interface Bindings {
   TURNSTILE_SECRET?: string;
   BREVO_API_KEY?: string;
   EMAIL_FROM?: string;
+  NOTIFICATION_WEBHOOK_URL?: string;
+  NOTIFICATION_WEBHOOK_SECRET?: string;
   R2_BUCKET: R2Bucket;
   API_RATE_LIMITER: RateLimit;
   SENSITIVE_RATE_LIMITER: RateLimit;
