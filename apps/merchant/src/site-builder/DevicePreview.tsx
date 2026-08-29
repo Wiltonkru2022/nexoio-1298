@@ -13,5 +13,5 @@ export function DevicePreview({editor,page}:{editor:SiteEditor;page:SitePage;sel
     },250);
     return()=>{cancelled=true;window.clearTimeout(timer)};
   },[editor,page.id]);
-  return <div className="preview-browser preview-exact">{loading?<div className="preview-render-status">Atualizando prévia…</div>:null}{html?<iframe title="Prévia exata do site" srcDoc={html} sandbox="" className="preview-render-frame"/>:<div className="preview-render-status">Não foi possível gerar a prévia.</div>}</div>;
+  return <div className="preview-browser preview-exact" style={{position:'relative',minHeight:720,overflow:'hidden'}}>{loading?<div style={{position:'absolute',zIndex:2,top:12,right:12,padding:'6px 10px',borderRadius:999,background:'#fff',boxShadow:'0 4px 18px #0002',fontSize:12}}>Atualizando prévia…</div>:null}{html?<iframe title="Prévia exata do site" srcDoc={html} sandbox="" style={{display:'block',width:'100%',height:720,border:0,background:'#fff'}}/>:<div style={{padding:24}}>Não foi possível gerar a prévia.</div>}</div>;
 }
