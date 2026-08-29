@@ -28,4 +28,5 @@ export const adminApi = {
   get: <T>(path: string) => adminRequest<T>(path),
   post: <T>(path: string, value?: unknown) => adminRequest<T>(path, { method: 'POST', body: value === undefined ? undefined : body(value) }),
   patch: <T>(path: string, value: unknown) => adminRequest<T>(path, { method: 'PATCH', body: body(value) }),
+  delete: <T>(path: string) => adminRequest<T>(path, { method: 'DELETE' }),
 };
