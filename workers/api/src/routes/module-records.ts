@@ -8,9 +8,9 @@ import type { ApiEnv } from '../types';
 
 const moduleKeySchema = z.enum(MODULES);
 const SPECIALIZED_MODULES = new Set([
-  'customers','products','services','schedule','sales','cash','finance','inventory','orders','tables','commands','kitchen','delivery',
-  'service_orders','equipment','parts','warranties','patients','medical_records','procedures','plans','memberships','classes','checkin',
-  'professionals','commissions','suppliers'
+  'customers','products','services','schedule','sales','cash','finance','inventory','orders','tables','commands','kitchen','delivery','pickup',
+  'service_orders','equipment','parts','quotes','warranties','patients','medical_records','procedures','plans','memberships','classes','checkin',
+  'professionals','teachers','commissions','suppliers','categories','variations','addons','combos','coupons','delivery_fees','business_hours','insurance','notices'
 ]);
 const createSchema = z.object({
   name: z.string().trim().min(1).max(180),
