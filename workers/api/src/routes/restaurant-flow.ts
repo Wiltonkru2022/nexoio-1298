@@ -9,7 +9,7 @@ export const restaurantFlowRoutes=new Hono<ApiEnv>();
 const rows=(r:any)=>r?.rows??r??[];const id=z.uuid();
 const modeSchema=z.enum(['automatic','manual','table_only']);
 
-restaurantFlowRoutes.get('/restaurant/settings',requirePermission('settings.read'),async c=>{
+restaurantFlowRoutes.get('/restaurant/settings',requirePermission('orders.read'),async c=>{
   const b=c.get('auth').businessId;
   const result=await c.get('db').execute(sql`select command_mode,updated_at from restaurant_settings where business_id=${b}::uuid limit 1`);
   return c.json({data:rows(result)[0]??{command_mode:'automatic'}});
@@ -42,23 +42,22 @@ restaurantFlowRoutes.post('/restaurant/tables/:tableId/open',requirePermission('
     return c.json({data:{mode,tableId:tableId.data,tableNumber:table.number,tabId:null,commandCode:null}});
   }
 
+  const existing=rows(await db.execute(sql`select id,code,guest_count from order_tabs where business_id=${b}::uuid and table_id=${tableId.data}::uuid and status='open' order by opened_at desc limit 1`))[0] as any;
+  if(existing){
+    await db.execute(sql`update restaurant_tables set status='occupied' where id=${tableId.data}::uuid and business_id=${b}::uuid`);
+    return c.json({data:{mode,tableId:tableId.data,tableNumber:table.number,tabId:existing.id,commandCode:existing.code,guestCount:existing.guest_count,reused:true}});
+  }
+
   let commandCode=body.data.commandCode?.trim()??null;
   if(mode==='manual'&&!commandCode)return error(c,422,'COMMAND_CODE_REQUIRED','Informe o número/código da comanda usada pelo restaurante');
   if(mode==='automatic')commandCode=`MESA ${table.number}`;
-
-  const existing=rows(await db.execute(sql`select id,code from order_tabs where business_id=${b}::uuid and table_id=${tableId.data}::uuid and status='open' order by opened_at desc limit 1`))[0] as any;
-  if(existing){
-    await db.execute(sql`update restaurant_tables set status='occupied' where id=${tableId.data}::uuid and business_id=${b}::uuid`);
-    return c.json({data:{mode,tableId:tableId.data,tableNumber:table.number,tabId:existing.id,commandCode:existing.code,reused:true}});
-  }
-
   const sameCode=rows(await db.execute(sql`select id,table_id from order_tabs where business_id=${b}::uuid and code=${commandCode} and status='open' limit 1`))[0] as any;
   if(sameCode)return error(c,409,'COMMAND_ALREADY_OPEN','Essa comanda já está aberta em outro atendimento');
   const tabId=uuidv7();
   await db.execute(sql`insert into order_tabs(id,business_id,unit_id,table_id,customer_id,code,guest_count,status,opened_by,opened_at)
     values(${tabId},${b}::uuid,${table.unit_id??null}::uuid,${tableId.data}::uuid,${body.data.customerId??null}::uuid,${commandCode},${body.data.guestCount},'open',${u}::uuid,now())`);
   await db.execute(sql`update restaurant_tables set status='occupied' where id=${tableId.data}::uuid and business_id=${b}::uuid`);
-  return c.json({data:{mode,tableId:tableId.data,tableNumber:table.number,tabId,commandCode,reused:false}},201);
+  return c.json({data:{mode,tableId:tableId.data,tableNumber:table.number,tabId,commandCode,guestCount:body.data.guestCount,reused:false}},201);
 });
 
 restaurantFlowRoutes.get('/restaurant/checks',requirePermission('orders.read'),async c=>{
