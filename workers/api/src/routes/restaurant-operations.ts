@@ -50,3 +50,12 @@ restaurantOperationRoutes.patch('/kitchen/:id/status',async c=>{
  await db.update(restaurantOrderItems).set({status:status==='queued'?'new':status}).where(and(eq(restaurantOrderItems.businessId,b),eq(restaurantOrderItems.orderId,row[0].orderId)));
  return c.json({data:{ok:true,status}});
 });
+
+restaurantOperationRoutes.patch('/tabs/:id/fulfillment',async c=>{
+ const b=c.get('auth').businessId,id=c.req.param('id'),db=c.get('db'),body=await c.req.json().catch(()=>({}));
+ const row=await db.select().from(restaurantTabs).where(and(eq(restaurantTabs.businessId,b),eq(restaurantTabs.id,id))).limit(1);if(!row[0])return error(c,404,'NOT_FOUND','Comanda não encontrada');
+ const current=(row[0].fulfillmentJson&&typeof row[0].fulfillmentJson==='object'?row[0].fulfillmentJson:{}) as Record<string,unknown>;
+ const fulfillmentJson={...current,...(body.customerName!==undefined?{customerName:String(body.customerName)}:{}),...(body.phone!==undefined?{phone:String(body.phone)}:{}),...(body.address!==undefined?{address:String(body.address)}:{}),...(body.courierName!==undefined?{courierName:String(body.courierName)}:{}),...(body.deliveryStatus!==undefined?{deliveryStatus:String(body.deliveryStatus)}:{})};
+ await db.update(restaurantTabs).set({fulfillmentJson,updatedAt:new Date()}).where(and(eq(restaurantTabs.businessId,b),eq(restaurantTabs.id,id)));
+ return c.json({data:{ok:true,fulfillmentJson}});
+});
