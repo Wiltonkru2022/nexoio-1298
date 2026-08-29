@@ -14,6 +14,7 @@ import { appointmentRoutes } from './routes/appointments';
 import { platformRoutes } from './routes/platform';
 import { adminRoutes } from './routes/admin';
 import { adminMasterRoutes } from './routes/admin-master';
+import { adminOperationsRoutes } from './routes/admin-operations';
 import { moduleRecordRoutes } from './routes/module-records';
 import { transactionalOrderRoutes } from './routes/transactional-order';
 import { operationalRoutes } from './routes/operations';
@@ -70,6 +71,7 @@ app.all('/api/auth/*', async (c) => {
 });
 app.route('/api/v1/platform', platformRoutes);
 app.route('/api/v1/admin', adminMasterRoutes);
+app.route('/api/v1/admin', adminOperationsRoutes);
 app.route('/api/v1/admin', adminRoutes);
 app.use('/api/v1/*', requireAuth);
 app.use('/api/v1/*', cloudflareRateLimit);
