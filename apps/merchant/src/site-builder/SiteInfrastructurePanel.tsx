@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Pill } from '@nexoio/ui';
 import { api, ApiError } from '../lib/api';
+import './site-infrastructure.css';
 
 type Domain={id:string;hostname:string;verification_status:string;ssl_status:string;dns_target:string|null;validation_json:Record<string,unknown>};
 type Media={id:string;original_name:string;mime_type:string;size_bytes:number;visibility:string;purpose:string;created_at:string};
